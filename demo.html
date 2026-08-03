@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Door Guard - Samsung SmartThings & Galaxy Style</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="src/index.css">
+  <style>
+    /* 새로고침 이쁜 버튼 및 갤럭시 설정 전용 추가 스타일 */
+    .btn-refresh-pretty {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--primary-green-light);
+      background: var(--primary-green-light);
+      color: var(--primary-green-dark);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12);
+      transition: all 0.2s;
+    }
+    .btn-refresh-pretty:hover {
+      background: var(--primary-green);
+      color: #FFFFFF;
+      transform: rotate(15deg);
+    }
+    .btn-refresh-pretty.spinning i {
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Galaxy One UI Settings Page Style */
+    .galaxy-settings-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .galaxy-profile-card {
+      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+      border-radius: 24px;
+      padding: 20px;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.25);
+    }
+    .galaxy-avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .galaxy-profile-info h3 {
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .galaxy-profile-info p {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 2px;
+    }
+
+    .galaxy-setting-group {
+      background: #FFFFFF;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .galaxy-setting-header {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--primary-green-dark);
+      letter-spacing: 0.5px;
+      padding: 14px 18px 6px;
+      text-transform: uppercase;
+    }
+    .galaxy-setting-item {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .galaxy-setting-item:last-child {
+      border-bottom: none;
+    }
+    .galaxy-item-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .galaxy-item-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: #F8FAFC;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .galaxy-item-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .galaxy-item-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    /* Page View Switcher */
+    .page-view {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .page-view.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    
+    <!-- 모바일 스마트폰 프레임 -->
+    <div class="phone-frame">
+      
+      <!-- 상단 상태바 -->
+      <div class="status-bar">
+        <span class="time" id="current-time">09:41</span>
+        <div class="notch"></div>
+        <div class="status-icons">
+          <i data-lucide="wifi" class="icon-sm"></i>
+          <i data-lucide="battery" class="icon-sm"></i>
+        </div>
+      </div>
+
+      <!-- 실시간 푸시 알림 바 -->
+      <div class="push-notification" id="push-notification">
+        <div class="push-icon-box">
+          <i data-lucide="shield-alert"></i>
+        </div>
+        <div class="push-content">
+          <div class="push-header">
+            <span class="push-title" id="push-title">침입 경보 발생!</span>
+            <span class="push-time">방금 전</span>
+          </div>
+          <p class="push-body" id="push-body">강한 연속 충격 및 문 열림 감지! 강철 암 결박 명령이 실행되었습니다.</p>
+        </div>
+      </div>
+
+      <!-- 앱 헤더 (상단 우측 설정 아이콘 제거 완료) -->
+      <header class="app-header">
+        <div class="header-left">
+          <div class="home-selector">
+            <i data-lucide="home" class="green-icon"></i>
+            <span class="home-name" id="page-title-text">우리집 현관문</span>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="connection-badge online">
+            <span class="pulse-dot"></span>
+            <span>MQTT 연결됨</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 메인 스크롤 콘텐츠 -->
+      <main class="app-content">
+
+        <!-- PAGE 1: 보안 홈 (Home View) -->
+        <div class="page-view active" id="view-home">
+          <!-- 메인 도어 상태 카드 -->
+          <section class="card status-card" id="status-card-bg">
+            <div class="card-header">
+              <div>
+                <span class="card-subtitle">SYSTEM STATUS</span>
+                <h2 class="card-title" id="status-title">안전 상태 (NORMAL)</h2>
+              </div>
+              <span class="status-pill state-normal" id="status-pill">정상 감시 중</span>
+            </div>
+
+            <div class="gauge-container">
+              <svg class="gauge-svg" viewBox="0 0 200 200">
+                <circle class="gauge-bg" cx="100" cy="100" r="85"></circle>
+                <circle class="gauge-progress" id="gauge-circle" cx="100" cy="100" r="85" style="stroke: #10B981; stroke-dashoffset: 0;"></circle>
+              </svg>
+              <div class="gauge-center">
+                <div class="shield-circle" id="shield-circle" style="background: #ECFDF5; color: #10B981;">
+                  <i data-lucide="shield-check" id="main-shield-icon"></i>
+                </div>
+                <span class="gauge-state-text" id="gauge-state-text">정상</span>
+                <span class="gauge-sub-text" id="gauge-sub-text">이상 없음</span>
+              </div>
+            </div>
+
+            <div class="door-stats-grid">
+              <div class="stat-box">
+                <span class="stat-label">강철 암 결박</span>
+                <div class="stat-value">
+                  <i data-lucide="lock" class="stat-icon" id="icon-lock"></i>
+                  <span id="text-lock">결박 해제됨</span>
+                </div>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label">문 개폐 상태</span>
+                <div class="stat-value">
+                  <i data-lucide="door-closed" class="stat-icon" id="icon-door"></i>
+                  <span id="text-door">닫힘 (0°)</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 빠른 제어 -->
+          <section class="section-container">
+            <h3 class="section-title">빠른 제어</h3>
+            <div class="quick-grid">
+              <button class="quick-card" id="btn-toggle-lock">
+                <div class="quick-icon-wrapper" id="lock-icon-wrapper">
+                  <i data-lucide="lock"></i>
+                </div>
+                <div class="quick-info">
+                  <span class="quick-title">비상 결박 제어</span>
+                  <span class="quick-status" id="quick-lock-status">터치하여 즉시 결박</span>
+                </div>
+                <div class="toggle-switch" id="lock-toggle-switch">
+                  <div class="toggle-handle"></div>
+                </div>
+              </button>
+
+              <div class="quick-card angle-card">
+                <div class="quick-card-header">
+                  <div class="quick-icon-wrapper green-bg">
+                    <i data-lucide="compass"></i>
+                  </div>
+                  <div style="margin-left: 16px;">
+                    <span class="quick-title">안전 개방 각도</span>
+                    <span class="quick-status" id="angle-display-value">현재 30° 설정</span>
+                  </div>
+                </div>
+                <div class="angle-presets">
+                  <button class="preset-chip" data-angle="15">15°</button>
+                  <button class="preset-chip active" data-angle="30">30°</button>
+                  <button class="preset-chip" data-angle="45">45°</button>
+                  <button class="preset-chip" data-angle="60">60°</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- AI 카메라 실시간 감지 -->
+          <section class="section-container">
+            <div class="section-header-flex">
+              <h3 class="section-title">AI 카메라 실시간 분석</h3>
+              <span class="live-badge"><span class="red-dot"></span> LIVE</span>
+            </div>
+
+            <div class="card ai-card">
+              <div class="ai-image-wrapper">
+                <img src="public/ai_snapshot.jpg" alt="AI Snapshot">
+                <div class="bounding-box" id="bounding-box">
+                  <div class="bbox-label">
+                    <i data-lucide="user" style="width:12px;height:12px;"></i>
+                    <span>PERSON (98.4%)</span>
+                  </div>
+                </div>
+              </div>
+              <div class="ai-info-bar">
+                <div class="ai-stat">
+                  <i data-lucide="cpu" class="green-icon"></i>
+                  <span>추론 시간: <strong>42ms</strong></span>
+                </div>
+                <div class="ai-stat">
+                  <i data-lucide="eye" class="green-icon"></i>
+                  <span>감지 객체: <strong id="detected-object-text">없음</strong></span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+
+        <!-- PAGE 2: 최근 이력 전용 페이지 (History View) -->
+        <div class="page-view" id="view-history">
+          <section class="section-container">
+            <div class="section-header-flex">
+              <div>
+                <h3 class="section-title" style="font-size: 18px;">감지 및 결박 이력</h3>
+                <span style="font-size: 12px; color: var(--text-muted); padding-left: 4px;">실시간 센서/이벤트 타임라인</span>
+              </div>
+              <!-- 이쁜 새로고침 버튼 -->
+              <button class="btn-refresh-pretty" id="btn-refresh-history">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                <span>새로고침</span>
+              </button>
+            </div>
+
+            <div class="event-list" id="event-list-history" style="margin-top: 10px;">
+              <!-- JS 동적 생성 -->
+            </div>
+          </section>
+        </div>
+
+
+        <!-- PAGE 3: 기기 상태 페이지 (Devices View) -->
+        <div class="page-view" id="view-devices">
+          <section class="section-container">
+            <h3 class="section-title">연결된 IoT 스마트 디바이스</h3>
+            <div class="card" style="display:flex; align-items:center; gap:16px;">
+              <div class="galaxy-item-icon" style="background:var(--primary-green-light); color:var(--primary-green-dark); width:48px; height:48px; border-radius:16px;">
+                <i data-lucide="shield-check" style="width:24px; height:24px;"></i>
+              </div>
+              <div>
+                <h4 style="font-size:16px; font-weight:800;">ESP32 Smart Guard 메인 락</h4>
+                <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">IP: 192.168.0.104 \| MQTT LWT: Connected</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+
+        <!-- PAGE 4: 갤럭시 원 UI 스타일 스마트 설정 전용 페이지 (Settings View) -->
+        <div class="page-view" id="view-settings">
+          <div class="galaxy-settings-container">
+            
+            <!-- 프로필 카드 -->
+            <div class="galaxy-profile-card">
+              <div class="galaxy-avatar">
+                <i data-lucide="shield" style="width: 28px; height: 28px; color: #FFFFFF;"></i>
+              </div>
+              <div class="galaxy-profile-info">
+                <h3>Smart Guard System</h3>
+                <p>스마트 문 침입 방지 관제 장치 #01</p>
+              </div>
+            </div>
+
+            <!-- 그룹 1: 비상 알림 수신처 -->
+            <div class="galaxy-setting-group">
+              <div class="galaxy-setting-header">비상 연락처 관리</div>
+              <div class="galaxy-setting-item" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div class="galaxy-item-left">
+                  <div class="galaxy-item-icon"><i data-lucide="phone-call"></i></div>
+                  <div>
+                    <div class="galaxy-item-title">비상 SMS 수신 번호</div>
+                    <div class="galaxy-item-sub">침입 발생 시 즉시 문자를 전송합니다</div>
+                  </div>
+                </div>
+                <div class="input-with-btn" style="margin-top: 4px;">
+                  <input type="tel" id="input-phone" placeholder="010-1234-5678" class="form-input">
+                  <button class="btn-secondary" id="btn-add-phone">추가</button>
+                </div>
+                <div class="phone-chip-list" id="phone-chip-list">
+                  <!-- JS 동적 생성 -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 그룹 2: 보안 민감도 & 야간 모드 -->
+            <div class="galaxy-setting-group">
+              <div class="galaxy-setting-header">경계 및 보안 옵션</div>
+              
+              <!-- 민감도 -->
+              <div class="galaxy-setting-item" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div class="galaxy-item-left">
+                  <div class="galaxy-item-icon"><i data-lucide="sliders"></i></div>
+                  <div>
+                    <div class="galaxy-item-title">충격 감지 민감도</div>
+                    <div class="galaxy-item-sub">현재 <strong id="sensitivity-val-text">2단계</strong> 설정됨</div>
+                  </div>
+                </div>
+                <input type="range" min="1" max="5" value="2" class="form-range" id="range-sensitivity" style="margin-top: 4px;">
+                <div class="range-labels">
+                  <span>1단계 (둔감)</span>
+                  <span>3단계 (보통)</span>
+                  <span>5단계 (민감)</span>
+                </div>
+              </div>
+
+              <!-- 야간 자동 결박 -->
+              <div class="galaxy-setting-item">
+                <div class="galaxy-item-left">
+                  <div class="galaxy-item-icon"><i data-lucide="moon"></i></div>
+                  <div>
+                    <div class="galaxy-item-title">야간 심야 자동 결박</div>
+                    <div class="galaxy-item-sub">23:00 ~ 06:00 미확인 열림 시 즉시 결박</div>
+                  </div>
+                </div>
+                <div class="toggle-switch active" id="night-mode-toggle">
+                  <div class="toggle-handle"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 그룹 3: 장치 및 시스템 정보 -->
+            <div class="galaxy-setting-group">
+              <div class="galaxy-setting-header">장치 시스템 정보</div>
+              <div class="galaxy-setting-item">
+                <div class="galaxy-item-left">
+                  <div class="galaxy-item-icon"><i data-lucide="info"></i></div>
+                  <div>
+                    <div class="galaxy-item-title">소프트웨어 버전</div>
+                    <div class="galaxy-item-sub">Smart Guard App v1.0.4 (Latest)</div>
+                  </div>
+                </div>
+              </div>
+              <div class="galaxy-setting-item">
+                <div class="galaxy-item-left">
+                  <div class="galaxy-item-icon"><i data-lucide="cpu"></i></div>
+                  <div>
+                    <div class="galaxy-item-title">디바이스 펌웨어</div>
+                    <div class="galaxy-item-sub">ESP32 Firmware v2.1.0-release</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </main>
+
+      <!-- 하단 탭 바 (이력 & 설정 탭 연동 완료) -->
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-target="home">
+          <i data-lucide="shield"></i>
+          <span>보안 홈</span>
+        </button>
+        <button class="nav-item" data-target="history">
+          <i data-lucide="history"></i>
+          <span>이력</span>
+        </button>
+        <button class="nav-item" data-target="devices">
+          <i data-lucide="cpu"></i>
+          <span>기기</span>
+        </button>
+        <button class="nav-item" data-target="settings">
+          <i data-lucide="settings"></i>
+          <span>설정</span>
+        </button>
+      </nav>
+      <div class="home-indicator"></div>
+
+    </div>
+
+    <!-- 우측 시뮬레이터 -->
+    <div class="simulator-panel">
+      <div class="sim-header">
+        <i data-lucide="terminal" class="green-icon"></i>
+        <h4>스마트 가드 시뮬레이터</h4>
+      </div>
+      <p class="sim-desc">백엔드 서버 없이도 아래 버튼을 눌러 침입 및 상태 변화를 즉시 시뮬레이션할 수 있습니다.</p>
+      
+      <div class="sim-btn-grid">
+        <button class="sim-btn sim-btn-normal" id="sim-btn-normal">
+          <i data-lucide="check-circle"></i>
+          <span>1. NORMAL (정상)</span>
+        </button>
+        <button class="sim-btn sim-btn-watch" id="sim-btn-watch">
+          <i data-lucide="user-check"></i>
+          <span>2. WATCH (사람 감지)</span>
+        </button>
+        <button class="sim-btn sim-btn-warning" id="sim-btn-warning">
+          <i data-lucide="alert-triangle"></i>
+          <span>3. WARNING (문 열림)</span>
+        </button>
+        <button class="sim-btn sim-btn-intrusion" id="sim-btn-intrusion">
+          <i data-lucide="siren"></i>
+          <span>4. INTRUSION (침입 결박!)</span>
+        </button>
+      </div>
+
+      <div class="sim-log-box">
+        <div class="sim-log-header">시스템 로그 콘솔</div>
+        <div class="sim-log-content" id="sim-console">
+          [System] Smart Door Guard Engine 시작됨.<br>
+          [MQTT] sg/device_01/state 연결 수신중...
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+
+      const state = {
+        activeTab: 'home',
+        systemState: 'NORMAL',
+        isLocked: false,
+        doorOpen: false,
+        doorAngle: 30,
+        smsNumbers: ['010-9876-5432', '010-1111-2222'],
+        sensitivity: 2,
+        nightMode: true,
+        events: [
+          { id: 1, type: 'normal', title: '정상 상태 관제 복귀', time: '11:45:10' },
+          { id: 2, type: 'watch', title: 'AI 사람 감지 (정문)', time: '11:40:22' },
+          { id: 3, type: 'normal', title: '시스템 전원 켜짐', time: '09:00:00' }
+        ]
+      };
+
+      // Tab Navigation System
+      const navItems = document.querySelectorAll('.bottom-nav .nav-item');
+      const pageViews = {
+        home: document.getElementById('view-home'),
+        history: document.getElementById('view-history'),
+        devices: document.getElementById('view-devices'),
+        settings: document.getElementById('view-settings')
+      };
+      const pageTitleText = document.getElementById('page-title-text');
+
+      navItems.forEach(item => {
+        item.addEventListener('click', () => {
+          const target = item.getAttribute('data-target');
+          if (!target) return;
+
+          navItems.forEach(n => n.classList.remove('active'));
+          item.classList.add('active');
+
+          Object.keys(pageViews).forEach(key => {
+            if (pageViews[key]) pageViews[key].classList.remove('active');
+          });
+          if (pageViews[target]) pageViews[target].classList.add('active');
+
+          // Header Title Update
+          if (target === 'home') pageTitleText.textContent = '우리집 현관문';
+          else if (target === 'history') pageTitleText.textContent = '이력 및 감지 로그';
+          else if (target === 'devices') pageTitleText.textContent = '스마트 기기 관제';
+          else if (target === 'settings') pageTitleText.textContent = '스마트 가드 설정';
+
+          state.activeTab = target;
+          if (window.lucide) lucide.createIcons();
+        });
+      });
+
+      // Gauge & Home DOMs
+      const gaugeCircle = document.getElementById('gauge-circle');
+      const statusTitle = document.getElementById('status-title');
+      const statusPill = document.getElementById('status-pill');
+      const shieldCircle = document.getElementById('shield-circle');
+      const gaugeStateText = document.getElementById('gauge-state-text');
+      const gaugeSubText = document.getElementById('gauge-sub-text');
+      const statusCardBg = document.getElementById('status-card-bg');
+      const textLock = document.getElementById('text-lock');
+      const textDoor = document.getElementById('text-door');
+
+      const btnToggleLock = document.getElementById('btn-toggle-lock');
+      const lockIconWrapper = document.getElementById('lock-icon-wrapper');
+      const lockToggleSwitch = document.getElementById('lock-toggle-switch');
+      const quickLockStatus = document.getElementById('quick-lock-status');
+      const boundingBox = document.getElementById('bounding-box');
+      const detectedObjectText = document.getElementById('detected-object-text');
+      const pushNotification = document.getElementById('push-notification');
+      const pushTitle = document.getElementById('push-title');
+      const pushBody = document.getElementById('push-body');
+      const simConsole = document.getElementById('sim-console');
+
+      function updateClock() {
+        const timeEl = document.getElementById('current-time');
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        if (timeEl) timeEl.textContent = `${h}:${m}`;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      function renderApp() {
+        const totalDash = 534;
+        switch (state.systemState) {
+          case 'NORMAL':
+            gaugeCircle.style.stroke = '#10B981';
+            gaugeCircle.style.strokeDashoffset = '0';
+            statusTitle.textContent = '안전 상태 (NORMAL)';
+            statusPill.textContent = '정상 감시 중';
+            statusPill.className = 'status-pill state-normal';
+            shieldCircle.style.background = '#ECFDF5';
+            shieldCircle.style.color = '#10B981';
+            gaugeStateText.textContent = '정상';
+            gaugeSubText.textContent = '침입/이상 없음';
+            statusCardBg.style.background = 'linear-gradient(145deg, #FFFFFF 0%, #F0FDF4 100%)';
+            boundingBox.classList.remove('active');
+            detectedObjectText.textContent = '없음';
+            break;
+          case 'WATCH':
+            gaugeCircle.style.stroke = '#F59E0B';
+            gaugeCircle.style.strokeDashoffset = `${totalDash * 0.35}`;
+            statusTitle.textContent = '주의 상태 (WATCH)';
+            statusPill.textContent = '외부인 접근 감지';
+            statusPill.className = 'status-pill state-watch';
+            shieldCircle.style.background = '#FEF3C7';
+            shieldCircle.style.color = '#F59E0B';
+            gaugeStateText.textContent = '감시 중';
+            gaugeSubText.textContent = '카메라 사람 감지';
+            statusCardBg.style.background = 'linear-gradient(145deg, #FFFFFF 0%, #FFFBEB 100%)';
+            boundingBox.classList.add('active');
+            detectedObjectText.textContent = '외부인 1명';
+            break;
+          case 'WARNING':
+            gaugeCircle.style.stroke = '#EA580C';
+            gaugeCircle.style.strokeDashoffset = `${totalDash * 0.65}`;
+            statusTitle.textContent = '경고 상태 (WARNING)';
+            statusPill.textContent = '열림 + 접근 중';
+            statusPill.className = 'status-pill state-warning';
+            shieldCircle.style.background = '#FFEDD5';
+            shieldCircle.style.color = '#EA580C';
+            gaugeStateText.textContent = '경고';
+            gaugeSubText.textContent = '미확인 문 열림!';
+            statusCardBg.style.background = 'linear-gradient(145deg, #FFFFFF 0%, #FFF7ED 100%)';
+            boundingBox.classList.add('active');
+            detectedObjectText.textContent = '외부인 1명';
+            break;
+          case 'INTRUSION':
+            gaugeCircle.style.stroke = '#E11D48';
+            gaugeCircle.style.strokeDashoffset = `${totalDash * 0.95}`;
+            statusTitle.textContent = '침입 심각 (INTRUSION)';
+            statusPill.textContent = '비상 결박 작동!';
+            statusPill.className = 'status-pill state-intrusion';
+            shieldCircle.style.background = '#FFE4E6';
+            shieldCircle.style.color = '#E11D48';
+            gaugeStateText.textContent = '침입 발생!';
+            gaugeSubText.textContent = '자동 강철 암 결박 실행';
+            statusCardBg.style.background = 'linear-gradient(145deg, #FFFFFF 0%, #FFF1F2 100%)';
+            boundingBox.classList.add('active');
+            detectedObjectText.textContent = '침입자 감지!';
+            break;
+        }
+
+        if (state.isLocked) {
+          textLock.textContent = '자동 결박됨';
+          textLock.style.color = '#10B981';
+          lockIconWrapper.classList.add('active');
+          lockToggleSwitch.classList.add('active');
+          quickLockStatus.textContent = '강철 암이 문을 결박함';
+        } else {
+          textLock.textContent = '결박 해제됨';
+          textLock.style.color = '#64748B';
+          lockIconWrapper.classList.remove('active');
+          lockToggleSwitch.classList.remove('active');
+          quickLockStatus.textContent = '터치하여 즉시 결박';
+        }
+
+        if (state.doorOpen) {
+          textDoor.textContent = `열림 (${state.doorAngle}°)`;
+          textDoor.style.color = '#EA580C';
+        } else {
+          textDoor.textContent = `닫힘 (0°)`;
+          textDoor.style.color = '#0F172A';
+        }
+
+        renderEvents();
+        renderPhoneChips();
+      }
+
+      function triggerPush(title, body) {
+        pushTitle.textContent = title;
+        pushBody.textContent = body;
+        pushNotification.classList.add('active');
+        setTimeout(() => pushNotification.classList.remove('active'), 4500);
+      }
+
+      function addEventLog(type, title) {
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        state.events.unshift({ id: Date.now(), type, title, time: timeStr });
+        if (state.events.length > 10) state.events.pop();
+        renderEvents();
+      }
+
+      function renderEvents() {
+        const historyList = document.getElementById('event-list-history');
+        if (!historyList) return;
+        historyList.innerHTML = '';
+        state.events.forEach(evt => {
+          const item = document.createElement('div');
+          item.className = 'event-item';
+          let iconName = 'info';
+          let typeClass = 'type-normal';
+          if (evt.type === 'intrusion') { iconName = 'shield-alert'; typeClass = 'type-intrusion'; }
+          else if (evt.type === 'warning') { iconName = 'alert-triangle'; typeClass = 'type-warning'; }
+          else if (evt.type === 'watch') { iconName = 'user-check'; typeClass = 'type-watch'; }
+          else { iconName = 'check-circle'; typeClass = 'type-normal'; }
+
+          item.innerHTML = `
+            <div class="event-icon-box ${typeClass}">
+              <i data-lucide="${iconName}"></i>
+            </div>
+            <div class="event-details">
+              <div class="event-title-text">${evt.title}</div>
+              <div class="event-time-text">${evt.time}</div>
+            </div>
+          `;
+          historyList.appendChild(item);
+        });
+        if (window.lucide) lucide.createIcons();
+      }
+
+      // Pretty Refresh Button Action
+      const btnRefreshHistory = document.getElementById('btn-refresh-history');
+      if (btnRefreshHistory) {
+        btnRefreshHistory.addEventListener('click', () => {
+          btnRefreshHistory.classList.add('spinning');
+          logSim('[API GET /events] 이력 데이터 동기화 완료');
+          setTimeout(() => {
+            btnRefreshHistory.classList.remove('spinning');
+            renderEvents();
+          }, 600);
+        });
+      }
+
+      function logSim(msg) {
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        simConsole.innerHTML += `<br>[${timeStr}] ${msg}`;
+        simConsole.scrollTop = simConsole.scrollHeight;
+      }
+
+      btnToggleLock.addEventListener('click', () => {
+        state.isLocked = !state.isLocked;
+        logSim(`[MQTT CMD] sg/device_01/cmd -> {"action": "lock", "status": "${state.isLocked ? 'LOCKED' : 'UNLOCKED'}"}`);
+        renderApp();
+      });
+
+      document.querySelectorAll('.preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          const ang = parseInt(chip.getAttribute('data-angle'), 10);
+          state.doorAngle = ang;
+          document.getElementById('angle-display-value').textContent = `현재 ${ang}° 설정`;
+          logSim(`[PATCH /devices/1/angle] 개방 제한 각도 ${ang}° 변경 완료`);
+          renderApp();
+        });
+      });
+
+      document.getElementById('sim-btn-normal').addEventListener('click', () => {
+        state.systemState = 'NORMAL';
+        state.doorOpen = false;
+        state.isLocked = false;
+        logSim('[EVENT] 상태: NORMAL | 문 닫힘, 경계 중');
+        addEventLog('normal', '정상 관제 복귀');
+        renderApp();
+      });
+
+      document.getElementById('sim-btn-watch').addEventListener('click', () => {
+        state.systemState = 'WATCH';
+        logSim('[MQTT EVENT] sg/device_01/event -> {"type": "person_detected", "confidence": 0.98}');
+        triggerPush('사람 접근 감지!', '카메라가 현관 앞에 접근한 외부인을 감지했습니다.');
+        addEventLog('watch', 'AI 카메라 외부인 감지 (Confidence 98%)');
+        renderApp();
+      });
+
+      document.getElementById('sim-btn-warning').addEventListener('click', () => {
+        state.systemState = 'WARNING';
+        state.doorOpen = true;
+        logSim('[MQTT EVENT] sg/device_01/event -> {"type": "door_open", "angle": 30}');
+        triggerPush('문 열림 경고!', '외부인 접근 상태에서 현관문이 열렸습니다!');
+        addEventLog('warning', '주의: 접근 중 문 열림 감지 (각도 30°)');
+        renderApp();
+      });
+
+      document.getElementById('sim-btn-intrusion').addEventListener('click', () => {
+        state.systemState = 'INTRUSION';
+        state.doorOpen = true;
+        state.isLocked = true;
+        logSim('[CRITICAL INTRUSION] 연속 충격 2.4G 감지 -> 강철 암 자동 결박 실행! SMS 발송 중...');
+        triggerPush('🚨 침입 경보 발생!', '강한 충격 감지! 강철 암 결박 및 비상 SMS 발송이 완료되었습니다.');
+        addEventLog('intrusion', '🚨 비상: 침입 확정! 강철 암 자동 결박 실행');
+        renderApp();
+      });
+
+      // Settings SMS Phone List Renderer
+      const inputPhone = document.getElementById('input-phone');
+      const btnAddPhone = document.getElementById('btn-add-phone');
+      const phoneChipList = document.getElementById('phone-chip-list');
+
+      if (btnAddPhone) {
+        btnAddPhone.addEventListener('click', () => {
+          const val = inputPhone.value.trim();
+          if (val && !state.smsNumbers.includes(val)) {
+            state.smsNumbers.push(val);
+            inputPhone.value = '';
+            renderPhoneChips();
+            logSim(`[SETTINGS] 비상 번호 ${val} 추가됨`);
+          }
+        });
+      }
+
+      function renderPhoneChips() {
+        if (!phoneChipList) return;
+        phoneChipList.innerHTML = '';
+        state.smsNumbers.forEach((num, index) => {
+          const chip = document.createElement('div');
+          chip.className = 'phone-chip';
+          chip.innerHTML = `
+            <span>${num}</span>
+            <i data-lucide="x-circle" class="chip-remove" data-index="${index}"></i>
+          `;
+          phoneChipList.appendChild(chip);
+        });
+
+        document.querySelectorAll('.chip-remove').forEach(el => {
+          el.addEventListener('click', () => {
+            const idx = parseInt(el.getAttribute('data-index'), 10);
+            state.smsNumbers.splice(idx, 1);
+            renderPhoneChips();
+          });
+        });
+
+        if (window.lucide) lucide.createIcons();
+      }
+
+      const rangeSens = document.getElementById('range-sensitivity');
+      if (rangeSens) {
+        rangeSens.addEventListener('input', (e) => {
+          document.getElementById('sensitivity-val-text').textContent = `${e.target.value}단계`;
+        });
+      }
+
+      renderApp();
+    });
+  </script>
+</body>
+</html>
