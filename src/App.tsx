@@ -1,23 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import { Wifi, Battery, Shield, History, Cpu, Settings } from 'lucide-react';
-import { SystemState, EventLog, DeviceSettings, PushNotificationData } from './types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Wifi, Battery, Shield, History, Video, Settings } from 'lucide-react';
+import { SystemState, EventLog, DeviceSettings, PushNotificationData, Signals } from './types';
+import { evaluateState, activeReasons } from './stateEngine';
 import { Header } from './components/Header';
 import { StatusCard } from './components/StatusCard';
-import { QuickControls } from './components/QuickControls';
-import { AiDetectionCard } from './components/AiDetectionCard';
+import { QuickControls, LOCK_PULSE_MS, BUZZER_MS } from './components/QuickControls';
+import { VideoPage } from './components/VideoPage';
 import { HistoryPage } from './components/HistoryPage';
 import { SettingsPage } from './components/SettingsPage';
 import { SimulatorPanel } from './components/SimulatorPanel';
 import { PushNotification } from './components/PushNotification';
 
-export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'history' | 'devices' | 'settings'>('home');
+const GAP_CLOSED_MM = 3;
+const GAP_OPEN_MM = 120;
 
-  const [systemState, setSystemState] = useState<SystemState>('NORMAL');
-  const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [doorOpen, setDoorOpen] = useState<boolean>(false);
-  const [doorAngle, setDoorAngle] = useState<number>(30);
-  const [currentTime, setCurrentTime] = useState<string>('09:41');
+const initialSignals: Signals = {
+  connected: true,
+  personCount: 0,
+  personRegistered: false,
+  personConfidence: 0,
+  doorOpen: false,
+  gapMm: GAP_CLOSED_MM,
+  shockTimes: [],
+};
+
+const formatTime = (date: Date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+
+export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'home' | 'history' | 'video' | 'settings'>('home');
+
+  const [signals, setSignals] = useState<Signals>(initialSignals);
+  const [now, setNow] = useState<number>(Date.now());
+  const [latencySec, setLatencySec] = useState<number>(0.2);
+
+  const [lockFiring, setLockFiring] = useState<boolean>(false);
+  const [lastLockAt, setLastLockAt] = useState<number | null>(null);
+  const [buzzerOn, setBuzzerOn] = useState<boolean>(false);
 
   const [notification, setNotification] = useState<PushNotificationData | null>(null);
 
@@ -28,30 +47,29 @@ export const App: React.FC = () => {
   });
 
   const [events, setEvents] = useState<EventLog[]>([
-    { id: 1, type: 'normal', title: '정상 상태 관제 복귀', time: '11:45:10' },
-    { id: 2, type: 'watch', title: 'AI 사람 감지 (정문)', time: '11:40:22' },
+    { id: 1, type: 'normal', title: '정상 단계 복귀', time: '11:45:10' },
+    { id: 2, type: 'watch', title: '감시 단계: 미등록 인물 감지', time: '11:40:22' },
     { id: 3, type: 'normal', title: '시스템 전원 켜짐', time: '09:00:00' },
   ]);
 
   const [logs, setLogs] = useState<string[]>([
-    '[System] Smart Door Guard React Engine 시작됨.',
-    '[MQTT] sg/device_01/state 연결 수신중...',
+    '[System] SafeGuard 상태 판단 엔진 시작됨.',
+    '[ESP32] 센서 수집 시작 (MPU6050 · VL53L0X · 문 상태 센서)',
   ]);
+
+  const systemState: SystemState = evaluateState(signals, now);
+  const prevStateRef = useRef<SystemState>(systemState);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2, '0');
-      const m = String(now.getMinutes()).padStart(2, '0');
-      setCurrentTime(`${h}:${m}`);
+      setNow(Date.now());
+      setLatencySec(0.1 + Math.round(Math.random() * 2) / 10);
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
   const addLog = (msg: string) => {
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    setLogs((prev) => [...prev, `[${timeStr}] ${msg}`]);
+    setLogs((prev) => [...prev, `[${formatTime(new Date())}] ${msg}`]);
   };
 
   const triggerPush = (title: string, body: string) => {
@@ -60,47 +78,113 @@ export const App: React.FC = () => {
   };
 
   const addEventLog = (type: EventLog['type'], title: string) => {
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     setEvents((prev) => [
-      { id: Date.now(), type, title, time: timeStr },
-      ...prev.slice(0, 9),
+      { id: Date.now() + Math.random(), type, title, time: formatTime(new Date()) },
+      ...prev.slice(0, 19),
     ]);
   };
 
-  const handleSetState = (newState: SystemState) => {
-    setSystemState(newState);
-    if (newState === 'NORMAL') {
-      setDoorOpen(false);
-      setIsLocked(false);
-      addLog('[EVENT] 상태: NORMAL | 문 닫힘, 경계 중');
-      addEventLog('normal', '정상 관제 복귀');
-    } else if (newState === 'WATCH') {
-      addLog('[MQTT EVENT] sg/device_01/event -> {"type": "person_detected", "confidence": 0.98}');
-      triggerPush('사람 접근 감지!', '카메라가 현관 앞에 접근한 외부인을 감지했습니다.');
-      addEventLog('watch', 'AI 카메라 외부인 감지 (Confidence 98%)');
-    } else if (newState === 'WARNING') {
-      setDoorOpen(true);
-      addLog('[MQTT EVENT] sg/device_01/event -> {"type": "door_open", "angle": 30}');
-      triggerPush('문 열림 경고!', '외부인 접근 상태에서 현관문이 열렸습니다!');
-      addEventLog('warning', '주의: 접근 중 문 열림 감지 (각도 30°)');
-    } else if (newState === 'INTRUSION') {
-      setDoorOpen(true);
-      setIsLocked(true);
-      addLog('[CRITICAL INTRUSION] 연속 충격 2.4G 감지 -> 강철 암 자동 결박 실행! SMS 발송 중...');
-      triggerPush('🚨 침입 경보 발생!', '강한 충격 감지! 강철 암 결박 및 비상 SMS 발송이 완료되었습니다.');
-      addEventLog('intrusion', '🚨 비상: 침입 확정! 강철 암 자동 결박 실행');
+  const fireLock = (source: 'auto' | 'manual') => {
+    setLockFiring(true);
+    addLog(`[CMD] 솔레노이드 잠금핀 1회 구동 (${LOCK_PULSE_MS}ms, ${source === 'auto' ? '자동' : '수동'})`);
+    setTimeout(() => {
+      setLockFiring(false);
+      setLastLockAt(Date.now());
+      addLog('[ESP32] 잠금핀 구동 완료 응답 수신');
+    }, LOCK_PULSE_MS);
+    if (source === 'manual') addEventLog('normal', '사용자 결박 구동');
+  };
+
+  const ringBuzzer = (source: 'auto' | 'manual') => {
+    setBuzzerOn(true);
+    addLog(`[CMD] 부저 1회 (${BUZZER_MS}ms, ${source === 'auto' ? '자동' : '수동'})`);
+    setTimeout(() => setBuzzerOn(false), BUZZER_MS);
+    if (source === 'manual') addEventLog('normal', '사용자 경고음 울림');
+  };
+
+  // 단계가 바뀔 때만 알림·이력·출력 동작을 수행한다
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    if (prev === systemState) return;
+    prevStateRef.current = systemState;
+
+    const reasons = activeReasons(signals, now).join(' + ');
+    const rank: Record<SystemState, number> = { UNKNOWN: -1, NORMAL: 0, WATCH: 1, WARNING: 2, INTRUSION: 3 };
+    const escalated = rank[systemState] > rank[prev];
+
+    addLog(`[ENGINE] 상태 변경 ${prev} → ${systemState}${reasons ? ` (${reasons})` : ''}`);
+
+    switch (systemState) {
+      case 'UNKNOWN':
+        addEventLog('unknown', '판정 불가: 장치 신호 수신 없음');
+        triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
+        break;
+      case 'NORMAL':
+        addEventLog('normal', prev === 'UNKNOWN' ? '신호 복구, 정상 단계' : '정상 단계 복귀');
+        break;
+      case 'WATCH':
+        addEventLog('watch', `감시 단계: ${reasons}`);
+        if (escalated) triggerPush('감시 단계', `${reasons} 신호를 확인하고 있습니다.`);
+        break;
+      case 'WARNING':
+        addEventLog('warning', `경고 단계: ${reasons}`);
+        if (escalated) {
+          ringBuzzer('auto');
+          triggerPush('경고 단계, 부저 작동', `${reasons} 신호가 함께 감지되었습니다.`);
+        }
+        break;
+      case 'INTRUSION':
+        addEventLog('intrusion', `침입 단계: ${reasons} → 잠금핀 구동`);
+        ringBuzzer('auto');
+        fireLock('auto');
+        triggerPush('🚨 침입 판단, 잠금핀 구동', `${reasons} 신호가 모두 감지되어 잠금핀을 구동했습니다.`);
+        break;
     }
+  }, [systemState]);
+
+  const handlePerson = (count: number, registered: boolean) => {
+    const confidence = count > 0 ? 0.9 + Math.round(Math.random() * 90) / 1000 : 0;
+    setSignals((s) => ({ ...s, personCount: count, personRegistered: registered, personConfidence: confidence }));
+    addLog(
+      count === 0
+        ? '[AI] 사람 검출 없음'
+        : `[AI] YOLO 사람 검출 (신뢰도 ${(confidence * 100).toFixed(1)}%) → 얼굴 식별: ${registered ? '등록 인물' : '미등록 인물'}`
+    );
+  };
+
+  const handleToggleDoor = () => {
+    const open = !signals.doorOpen;
+    setSignals((s) => ({ ...s, doorOpen: open, gapMm: open ? GAP_OPEN_MM : GAP_CLOSED_MM }));
+    addLog(`[ESP32] 문 상태 센서: ${open ? '열림' : '닫힘'} · 문틈 거리 ${open ? GAP_OPEN_MM : GAP_CLOSED_MM}mm`);
+  };
+
+  const handleShock = () => {
+    const t = Date.now();
+    setSignals((s) => ({ ...s, shockTimes: [...s.shockTimes.filter((x) => t - x <= 60_000), t] }));
+    setNow(t);
+    addLog('[ESP32] MPU6050 충격 감지');
+  };
+
+  const handleToggleConnection = () => {
+    setSignals((s) => ({ ...s, connected: !s.connected }));
+    addLog(signals.connected ? '[NET] 장치 신호 끊김' : '[NET] 장치 신호 복구');
+  };
+
+  const handleReset = () => {
+    setSignals(initialSignals);
+    addLog('[SIM] 신호 초기화');
   };
 
   const getPageTitle = () => {
     switch (activeTab) {
       case 'home': return '우리집 현관문';
       case 'history': return '이력 및 감지 로그';
-      case 'devices': return '스마트 기기 관제';
-      case 'settings': return '스마트 가드 설정';
+      case 'video': return '현관 영상';
+      case 'settings': return 'SafeGuard 설정';
     }
   };
+
+  const currentTime = formatTime(new Date(now)).slice(0, 5);
 
   return (
     <div class="app-layout">
@@ -119,7 +203,7 @@ export const App: React.FC = () => {
         <PushNotification notification={notification} />
 
         {/* Header */}
-        <Header title={getPageTitle()} />
+        <Header title={getPageTitle()} connected={signals.connected} />
 
         {/* Dynamic Page Views */}
         <main class="app-content">
@@ -127,48 +211,29 @@ export const App: React.FC = () => {
             <>
               <StatusCard
                 systemState={systemState}
-                isLocked={isLocked}
-                doorOpen={doorOpen}
-                doorAngle={doorAngle}
+                signals={signals}
+                latencySec={signals.connected ? latencySec : null}
               />
               <QuickControls
-                isLocked={isLocked}
-                doorAngle={doorAngle}
-                onToggleLock={() => {
-                  const nextLocked = !isLocked;
-                  setIsLocked(nextLocked);
-                  addLog(`[MQTT CMD] sg/device_01/cmd -> {"action": "lock", "status": "${nextLocked ? 'LOCKED' : 'UNLOCKED'}"}`);
-                }}
-                onChangeAngle={(ang) => {
-                  setDoorAngle(ang);
-                  addLog(`[PATCH /devices/1/angle] 개방 제한 각도 ${ang}° 변경 완료`);
-                }}
+                connected={signals.connected}
+                lockFiring={lockFiring}
+                buzzerOn={buzzerOn}
+                lastLockAt={lastLockAt}
+                now={now}
+                onFireLock={() => fireLock('manual')}
+                onRingBuzzer={() => ringBuzzer('manual')}
               />
-              <AiDetectionCard systemState={systemState} />
             </>
           )}
 
           {activeTab === 'history' && (
             <HistoryPage
               events={events}
-              onRefresh={() => addLog('[API GET /events] 이력 데이터 동기화 완료')}
+              onRefresh={() => addLog('[API] 이벤트 이력 동기화 완료')}
             />
           )}
 
-          {activeTab === 'devices' && (
-            <section class="section-container">
-              <h3 class="section-title">연결된 IoT 스마트 디바이스</h3>
-              <div class="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div class="galaxy-item-icon" style={{ background: 'var(--primary-green-light)', color: 'var(--primary-green-dark)', width: 48, height: 48, borderRadius: 16 }}>
-                  <Shield size={24} />
-                </div>
-                <div>
-                  <h4 style={{ fontSize: 16, fontWeight: 800 }}>ESP32 Smart Guard 메인 락</h4>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>IP: 192.168.0.104 | MQTT LWT: Connected</p>
-                </div>
-              </div>
-            </section>
-          )}
+          {activeTab === 'video' && <VideoPage signals={signals} now={now} />}
 
           {activeTab === 'settings' && (
             <SettingsPage
@@ -198,11 +263,11 @@ export const App: React.FC = () => {
             <span>이력</span>
           </button>
           <button
-            class={`nav-item ${activeTab === 'devices' ? 'active' : ''}`}
-            onClick={() => setActiveTab('devices')}
+            class={`nav-item ${activeTab === 'video' ? 'active' : ''}`}
+            onClick={() => setActiveTab('video')}
           >
-            <Cpu size={20} />
-            <span>기기</span>
+            <Video size={20} />
+            <span>영상</span>
           </button>
           <button
             class={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
@@ -216,7 +281,15 @@ export const App: React.FC = () => {
       </div>
 
       {/* Simulator Panel */}
-      <SimulatorPanel onSetState={handleSetState} logs={logs} />
+      <SimulatorPanel
+        signals={signals}
+        onPerson={handlePerson}
+        onToggleDoor={handleToggleDoor}
+        onShock={handleShock}
+        onToggleConnection={handleToggleConnection}
+        onReset={handleReset}
+        logs={logs}
+      />
     </div>
   );
 };

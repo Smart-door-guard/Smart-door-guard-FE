@@ -47,8 +47,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
           <Shield size={28} color="#FFFFFF" />
         </div>
         <div class="galaxy-profile-info">
-          <h3>Smart Guard System</h3>
-          <p>스마트 문 침입 방지 관제 장치 #01</p>
+          <h3>SafeGuard</h3>
+          <p>현관문 보조 잠금 장치 #01</p>
         </div>
       </div>
 
@@ -142,7 +142,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             <div class="galaxy-item-icon"><Info size={18} /></div>
             <div>
               <div class="galaxy-item-title">소프트웨어 버전</div>
-              <div class="galaxy-item-sub">Smart Guard App v1.0.4 (Latest)</div>
+              <div class="galaxy-item-sub">SafeGuard App v1.0.4 (Latest)</div>
             </div>
           </div>
         </div>

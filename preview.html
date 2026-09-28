@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>SafeGuard Preview</title>
+<!-- src/ 코드를 서버 없이 확인하기 위한 단일 파일 미리보기 (더블클릭으로 실행) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/index.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script>window.react = window.React; // lucide-react UMD는 소문자 react 전역을 찾는다</script>
+<script src="https://unpkg.com/lucide-react@0.428.0/dist/umd/lucide-react.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/plain" id="app-source">
+const { useState, useEffect, useRef } = React;
+const { Activity, AlertTriangle, Battery, Bell, Check, CheckCircle, Cpu, DoorOpen, Eye, Film, History, Home, Info, Lock, Moon, PhoneCall, RefreshCw, RotateCcw, Ruler, ScanFace, Settings, Shield, ShieldAlert, ShieldCheck, ShieldQuestion, Sliders, Terminal, User, UserCheck, UserMinus, UserX, Video, Wifi, WifiOff, XCircle } = LucideReact;
+// ---- src/types.ts
+type SystemState = 'UNKNOWN' | 'NORMAL' | 'WATCH' | 'WARNING' | 'INTRUSION';
+
+interface EventLog {
+  id: number;
+  type: 'unknown' | 'normal' | 'watch' | 'warning' | 'intrusion';
+  title: string;
+  time: string;
+}
+
+// 상태 판단 엔진에 들어가는 입력 신호 (ESP32 센서 + 서버 AI 분석 결과)
+interface Signals {
+  connected: boolean; // 서버·ESP32 신호 수신 여부
+  personCount: number; // YOLO 사람 검출 수
+  personRegistered: boolean; // 얼굴 식별 결과: 등록 인물 여부
+  personConfidence: number; // 검출 신뢰도 (0~1)
+  doorOpen: boolean; // 문 상태 센서
+  gapMm: number; // VL53L0X 문틈 거리
+  shockTimes: number[]; // MPU6050 충격 감지 시각(ms)
+}
+
+interface DeviceSettings {
+  smsNumbers: string[];
+  sensitivity: number;
+  nightMode: boolean;
+}
+
+interface PushNotificationData {
+  title: string;
+  body: string;
+}
+
+// ---- src/stateEngine.ts
+
+// 이 시간 안에 충격이 SHOCK_REPEAT_COUNT번 이상 들어오면 '충격 반복'으로 본다
+const SHOCK_WINDOW_MS = 10_000;
+const SHOCK_REPEAT_COUNT = 2;
+
+const recentShocks = (signals: Signals, now: number) =>
+  signals.shockTimes.filter((t) => now - t <= SHOCK_WINDOW_MS).length;
+
+// 단계를 올리는 근거 신호 목록. 등록 인물은 근거에서 제외한다.
+const activeReasons = (signals: Signals, now: number): string[] => {
+  const reasons: string[] = [];
+  if (signals.personCount > 0 && !signals.personRegistered) reasons.push('미등록 인물 감지');
+  if (signals.doorOpen) reasons.push('문 열림');
+  if (recentShocks(signals, now) >= SHOCK_REPEAT_COUNT) reasons.push('충격 반복');
+  return reasons;
+};
+
+// 사람 감지 · 문 열림 · 충격 반복을 함께 확인해 단계를 올린다.
+// 한 신호만으로는 감시 단계까지만 올라가고, 경고·침입은 여러 신호가 겹쳐야 한다.
+const evaluateState = (signals: Signals, now: number): SystemState => {
+  if (!signals.connected) return 'UNKNOWN';
+  const count = activeReasons(signals, now).length;
+  if (count >= 3) return 'INTRUSION';
+  if (count === 2) return 'WARNING';
+  if (count === 1) return 'WATCH';
+  return 'NORMAL';
+};
+
+// ---- src/components/Header.tsx
+
+
+interface HeaderProps {
+  title: string;
+  connected: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ title, connected }) => {
+  return (
+    <header class="app-header">
+      <div class="header-left">
+        <div class="home-selector">
+          <Home class="green-icon" size={20} />
+          <span class="home-name">{title}</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class={`connection-badge ${connected ? 'online' : 'offline'}`}>
+          <span class="pulse-dot"></span>
+          <span>{connected ? '장치 연결됨' : '연결 끊김'}</span>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+// ---- src/components/PushNotification.tsx
+
+
+
+interface PushNotificationProps {
+  notification: PushNotificationData | null;
+}
+
+const PushNotification: React.FC<PushNotificationProps> = ({ notification }) => {
+  return (
+    <div class={`push-notification ${notification ? 'active' : ''}`}>
+      <div class="push-icon-box">
+        <ShieldAlert size={22} />
+      </div>
+      <div class="push-content">
+        <div class="push-header">
+          <span class="push-title">{notification?.title}</span>
+          <span class="push-time">방금 전</span>
+        </div>
+        <p class="push-body">{notification?.body}</p>
+      </div>
+    </div>
+  );
+};
+
+// ---- src/components/StatusCard.tsx
+
+
+
+interface StatusCardProps {
+  systemState: SystemState;
+  signals: Signals;
+  latencySec: number | null;
+}
+
+const StatusCard: React.FC<StatusCardProps> = ({ systemState, signals, latencySec }) => {
+  const getStrokeDashOffset = () => {
+    const totalDash = 534;
+    switch (systemState) {
+      case 'UNKNOWN': return 0;
+      case 'NORMAL': return 0;
+      case 'WATCH': return totalDash * 0.35;
+      case 'WARNING': return totalDash * 0.65;
+      case 'INTRUSION': return totalDash * 0.95;
+    }
+  };
+
+  const getStrokeColor = () => {
+    switch (systemState) {
+      case 'UNKNOWN': return '#CBD5E1';
+      case 'NORMAL': return '#10B981';
+      case 'WATCH': return '#F59E0B';
+      case 'WARNING': return '#EA580C';
+      case 'INTRUSION': return '#E11D48';
+    }
+  };
+
+  const renderStateInfo = () => {
+    switch (systemState) {
+      case 'UNKNOWN':
+        return {
+          title: '판정 불가 (UNKNOWN)',
+          pillText: '신호 수신 없음',
+          pillClass: 'state-unknown',
+          gaugeText: '판정 불가',
+          subText: '장치 연결 확인 필요',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #F1F5F9 100%)',
+          iconBg: '#E2E8F0',
+          iconColor: '#64748B',
+          Icon: ShieldQuestion,
+        };
+      case 'NORMAL':
+        return {
+          title: '안전 상태 (NORMAL)',
+          pillText: '정상 감시 중',
+          pillClass: 'state-normal',
+          gaugeText: '정상',
+          subText: '침입 · 이상 없음',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #F0FDF4 100%)',
+          iconBg: '#ECFDF5',
+          iconColor: '#10B981',
+          Icon: ShieldCheck,
+        };
+      case 'WATCH':
+        return {
+          title: '감시 상태 (WATCH)',
+          pillText: '이상 신호 1건',
+          pillClass: 'state-watch',
+          gaugeText: '감시',
+          subText: '추가 신호 확인 중',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #FFFBEB 100%)',
+          iconBg: '#FEF3C7',
+          iconColor: '#F59E0B',
+          Icon: Eye,
+        };
+      case 'WARNING':
+        return {
+          title: '경고 상태 (WARNING)',
+          pillText: '부저 경고',
+          pillClass: 'state-warning',
+          gaugeText: '경고',
+          subText: '이상 신호 2건 동시 발생',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #FFF7ED 100%)',
+          iconBg: '#FFEDD5',
+          iconColor: '#EA580C',
+          Icon: AlertTriangle,
+        };
+      case 'INTRUSION':
+        return {
+          title: '침입 상태 (INTRUSION)',
+          pillText: '잠금핀 구동',
+          pillClass: 'state-intrusion',
+          gaugeText: '침입',
+          subText: '사람 · 문 열림 · 충격 반복',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #FFF1F2 100%)',
+          iconBg: '#FFE4E6',
+          iconColor: '#E11D48',
+          Icon: ShieldAlert,
+        };
+    }
+  };
+
+  const info = renderStateInfo();
+  const StateIcon = info.Icon;
+  const connected = signals.connected;
+
+  const doorText = !connected ? '—' : signals.doorOpen ? '열림' : '닫힘';
+  const personText = !connected
+    ? '—'
+    : signals.personCount === 0
+      ? '없음'
+      : `${signals.personCount}명 · ${signals.personRegistered ? '등록' : '미등록'}`;
+  const latencyText = latencySec === null ? '—' : `${latencySec.toFixed(1)}초`;
+
+  return (
+    <section class="card status-card" style={{ background: info.bg }}>
+      <div class="card-header">
+        <div>
+          <span class="card-subtitle">SYSTEM STATUS</span>
+          <h2 class="card-title">{info.title}</h2>
+        </div>
+        <span class={`status-pill ${info.pillClass}`}>{info.pillText}</span>
+      </div>
+
+      <div class="gauge-container">
+        <svg class="gauge-svg" viewBox="0 0 200 200">
+          <circle class="gauge-bg" cx="100" cy="100" r="85" />
+          <circle
+            class="gauge-progress"
+            cx="100"
+            cy="100"
+            r="85"
+            style={{
+              stroke: getStrokeColor(),
+              strokeDashoffset: getStrokeDashOffset(),
+            }}
+          />
+        </svg>
+        <div class="gauge-center">
+          <div class="shield-circle" style={{ background: info.iconBg, color: info.iconColor }}>
+            <StateIcon size={28} />
+          </div>
+          <span class="gauge-state-text" style={{ color: info.iconColor }}>{info.gaugeText}</span>
+          <span class="gauge-sub-text">{info.subText}</span>
+        </div>
+      </div>
+
+      <div class="door-stats-grid">
+        <div class="stat-box">
+          <span class="stat-label">문 상태</span>
+          <div class="stat-value" style={{ color: signals.doorOpen && connected ? '#EA580C' : undefined }}>
+            {doorText}
+          </div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">사람 감지</span>
+          <div class="stat-value">{personText}</div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">신호 지연</span>
+          <div class="stat-value">{latencyText}</div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ---- src/components/QuickControls.tsx
+
+
+const LOCK_PULSE_MS = 300;
+const BUZZER_MS = 1000;
+
+interface QuickControlsProps {
+  connected: boolean;
+  lockFiring: boolean;
+  buzzerOn: boolean;
+  lastLockAt: number | null;
+  now: number;
+  onFireLock: () => void;
+  onRingBuzzer: () => void;
+}
+
+const formatAgo = (ms: number) => {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return `${sec}초 전`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}분 전`;
+  return `${Math.floor(min / 60)}시간 전`;
+};
+
+const QuickControls: React.FC<QuickControlsProps> = ({
+  connected,
+  lockFiring,
+  buzzerOn,
+  lastLockAt,
+  now,
+  onFireLock,
+  onRingBuzzer,
+}) => {
+  return (
+    <section class="section-container">
+      <h3 class="section-title">빠른 제어</h3>
+      <div class="quick-grid">
+        <div class="quick-card control-card">
+          <div class="control-row">
+            <div class={`quick-icon-wrapper ${lockFiring ? 'active' : ''}`}>
+              <Lock size={20} />
+            </div>
+            <div class="quick-info">
+              <span class="quick-title">결박 구동</span>
+              <span class="quick-status">눌러서 1회 구동 · {LOCK_PULSE_MS}ms</span>
+            </div>
+            <button
+              class="action-btn primary"
+              disabled={!connected || lockFiring}
+              onClick={onFireLock}
+            >
+              {lockFiring ? '구동 중' : '구동'}
+            </button>
+          </div>
+          <div class="control-footer">
+            <span class="control-footer-left">
+              {lastLockAt === null ? (
+                '구동 기록 없음'
+              ) : (
+                <>
+                  <Check size={14} /> 마지막 구동 확인 · {formatAgo(now - lastLockAt)}
+                </>
+              )}
+            </span>
+            <span class="control-footer-right">잠금 상태 확인 불가</span>
+          </div>
+        </div>
+
+        <div class="quick-card control-card">
+          <div class="control-row">
+            <div class={`quick-icon-wrapper ${buzzerOn ? 'active' : ''}`}>
+              <Bell size={20} />
+            </div>
+            <div class="quick-info">
+              <span class="quick-title">경고음 울리기</span>
+              <span class="quick-status">부저 1회 · {BUZZER_MS}ms</span>
+            </div>
+            <button
+              class="action-btn secondary"
+              disabled={!connected || buzzerOn}
+              onClick={onRingBuzzer}
+            >
+              {buzzerOn ? '울리는 중' : '울리기'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ---- src/components/AiDetectionCard.tsx
+
+
+
+const SAMPLE_FPS = 4; // 입력 영상 3~5 FPS 샘플링
+
+interface AiDetectionCardProps {
+  signals: Signals;
+}
+
+const AiDetectionCard: React.FC<AiDetectionCardProps> = ({ signals }) => {
+  const connected = signals.connected;
+  const showBBox = connected && signals.personCount > 0;
+  const confidence = (signals.personConfidence * 100).toFixed(1);
+  const faceText = !showBBox ? '—' : signals.personRegistered ? '등록 인물' : '미등록 인물';
+
+  return (
+    <section class="section-container">
+      <div class="section-header-flex">
+        <h3 class="section-title">현관 카메라 · AI 분석</h3>
+        <span class={`live-badge ${connected ? '' : 'offline'}`}>
+          <span class="red-dot"></span> {connected ? 'LIVE' : 'OFFLINE'}
+        </span>
+      </div>
+
+      <div class="card ai-card">
+        <div class="ai-image-wrapper">
+          <img src="public/ai_snapshot.jpg" alt="현관 카메라 영상" style={{ opacity: connected ? 1 : 0.3 }} />
+          <div class={`bounding-box ${showBBox ? 'active' : ''} ${signals.personRegistered ? 'registered' : ''}`}>
+            <div class="bbox-label">
+              <User size={12} />
+              <span>PERSON ({confidence}%) · {signals.personRegistered ? '등록' : '미등록'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="ai-info-bar">
+          <div class="ai-stat">
+            <Film class="green-icon" size={16} />
+            <span>샘플링: <strong>{connected ? `${SAMPLE_FPS} FPS` : '—'}</strong></span>
+          </div>
+          <div class="ai-stat">
+            <Eye class="green-icon" size={16} />
+            <span>
+              YOLO 검출: <strong>{showBBox ? `사람 ${signals.personCount}명` : '없음'}</strong>
+            </span>
+          </div>
+          <div class="ai-stat">
+            <ScanFace class="green-icon" size={16} />
+            <span>얼굴: <strong>{faceText}</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ---- src/components/VideoPage.tsx
+
+
+
+
+
+interface VideoPageProps {
+  signals: Signals;
+  now: number;
+}
+
+const VideoPage: React.FC<VideoPageProps> = ({ signals, now }) => {
+  const connected = signals.connected;
+  const shocks = recentShocks(signals, now);
+  const reasons = connected ? activeReasons(signals, now) : [];
+
+  const rows = [
+    {
+      Icon: User,
+      label: '사람 감지 (YOLO · 얼굴 식별)',
+      value: signals.personCount === 0
+        ? '없음'
+        : `${signals.personCount}명 · ${signals.personRegistered ? '등록' : '미등록'}`,
+      active: signals.personCount > 0 && !signals.personRegistered,
+    },
+    {
+      Icon: DoorOpen,
+      label: '문 상태 센서',
+      value: signals.doorOpen ? '열림' : '닫힘',
+      active: signals.doorOpen,
+    },
+    {
+      Icon: Ruler,
+      label: '문틈 거리 (VL53L0X)',
+      value: `${signals.gapMm}mm`,
+      active: signals.doorOpen,
+    },
+    {
+      Icon: Activity,
+      label: `충격 (MPU6050 · 최근 ${SHOCK_WINDOW_MS / 1000}초)`,
+      value: `${shocks}회${shocks >= SHOCK_REPEAT_COUNT ? ' · 반복' : ''}`,
+      active: shocks >= SHOCK_REPEAT_COUNT,
+    },
+  ];
+
+  return (
+    <>
+      <AiDetectionCard signals={signals} />
+
+      <section class="section-container">
+        <h3 class="section-title">판단에 쓰이는 신호</h3>
+        <div class="card signal-card">
+          {rows.map(({ Icon, label, value, active }) => (
+            <div key={label} class="signal-row">
+              <div class={`signal-icon ${connected && active ? 'active' : ''}`}>
+                <Icon size={16} />
+              </div>
+              <span class="signal-label">{label}</span>
+              <span class={`signal-value ${connected && active ? 'active' : ''}`}>
+                {connected ? value : '—'}
+              </span>
+            </div>
+          ))}
+          <div class="signal-summary">
+            {!connected
+              ? '신호가 들어오지 않아 판정할 수 없습니다'
+              : reasons.length === 0
+                ? '이상 신호 없음'
+                : `이상 신호 ${reasons.length}건: ${reasons.join(' · ')}`}
+          </div>
+        </div>
+        <p class="signal-note">한 신호만으로는 경고 단계로 올리지 않아 오탐을 줄입니다</p>
+      </section>
+    </>
+  );
+};
+
+// ---- src/components/HistoryPage.tsx
+
+
+
+interface HistoryPageProps {
+  events: EventLog[];
+  onRefresh: () => void;
+}
+
+const HistoryPage: React.FC<HistoryPageProps> = ({ events, onRefresh }) => {
+  const [isSpinning, setIsSpinning] = useState(false);
+
+  const handleRefreshClick = () => {
+    setIsSpinning(true);
+    onRefresh();
+    setTimeout(() => {
+      setIsSpinning(false);
+    }, 600);
+  };
+
+  const getEventIcon = (type: string) => {
+    switch (type) {
+      case 'intrusion': return <ShieldAlert size={18} />;
+      case 'warning': return <AlertTriangle size={18} />;
+      case 'watch': return <Eye size={18} />;
+      case 'unknown': return <ShieldQuestion size={18} />;
+      default: return <CheckCircle size={18} />;
+    }
+  };
+
+  const getEventClass = (type: string) => {
+    switch (type) {
+      case 'intrusion': return 'type-intrusion';
+      case 'warning': return 'type-warning';
+      case 'watch': return 'type-watch';
+      case 'unknown': return 'type-unknown';
+      default: return 'type-normal';
+    }
+  };
+
+  return (
+    <section class="section-container">
+      <div class="section-header-flex">
+        <div>
+          <h3 class="section-title" style={{ fontSize: 18 }}>감지 및 결박 이력</h3>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', paddingLeft: 4 }}>
+            실시간 센서/이벤트 타임라인
+          </span>
+        </div>
+        <button
+          class={`btn-refresh-pretty ${isSpinning ? 'spinning' : ''}`}
+          onClick={handleRefreshClick}
+        >
+          <RefreshCw size={14} />
+          <span>새로고침</span>
+        </button>
+      </div>
+
+      <div class="event-list" style={{ marginTop: 12 }}>
+        {events.map((evt) => (
+          <div key={evt.id} class="event-item">
+            <div class={`event-icon-box ${getEventClass(evt.type)}`}>
+              {getEventIcon(evt.type)}
+            </div>
+            <div class="event-details">
+              <div class="event-title-text">{evt.title}</div>
+              <div class="event-time-text">{evt.time}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+// ---- src/components/SettingsPage.tsx
+
+
+
+interface SettingsPageProps {
+  settings: DeviceSettings;
+  onSaveSettings: (newSettings: DeviceSettings) => void;
+}
+
+const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSettings }) => {
+  const [smsNumbers, setSmsNumbers] = useState<string[]>(settings.smsNumbers);
+  const [sensitivity, setSensitivity] = useState<number>(settings.sensitivity);
+  const [nightMode, setNightMode] = useState<boolean>(settings.nightMode);
+  const [phoneInput, setPhoneInput] = useState<string>('');
+
+  const handleAddPhone = () => {
+    if (phoneInput.trim() && !smsNumbers.includes(phoneInput.trim())) {
+      const updated = [...smsNumbers, phoneInput.trim()];
+      setSmsNumbers(updated);
+      setPhoneInput('');
+      onSaveSettings({ smsNumbers: updated, sensitivity, nightMode });
+    }
+  };
+
+  const handleRemovePhone = (num: string) => {
+    const updated = smsNumbers.filter((item) => item !== num);
+    setSmsNumbers(updated);
+    onSaveSettings({ smsNumbers: updated, sensitivity, nightMode });
+  };
+
+  const handleSensitivityChange = (val: number) => {
+    setSensitivity(val);
+    onSaveSettings({ smsNumbers, sensitivity: val, nightMode });
+  };
+
+  const handleNightModeToggle = () => {
+    const updated = !nightMode;
+    setNightMode(updated);
+    onSaveSettings({ smsNumbers, sensitivity, nightMode: updated });
+  };
+
+  return (
+    <div class="galaxy-settings-container">
+      {/* Profile Card */}
+      <div class="galaxy-profile-card">
+        <div class="galaxy-avatar">
+          <Shield size={28} color="#FFFFFF" />
+        </div>
+        <div class="galaxy-profile-info">
+          <h3>SafeGuard</h3>
+          <p>현관문 보조 잠금 장치 #01</p>
+        </div>
+      </div>
+
+      {/* Section 1: Emergency SMS */}
+      <div class="galaxy-setting-group">
+        <div class="galaxy-setting-header">비상 연락처 관리</div>
+        <div class="galaxy-setting-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          <div class="galaxy-item-left">
+            <div class="galaxy-item-icon">
+              <PhoneCall size={18} />
+            </div>
+            <div>
+              <div class="galaxy-item-title">비상 SMS 수신 번호</div>
+              <div class="galaxy-item-sub">침입 발생 시 즉시 문자를 전송합니다</div>
+            </div>
+          </div>
+          <div class="input-with-btn" style={{ marginTop: 4 }}>
+            <input
+              type="tel"
+              placeholder="010-1234-5678"
+              class="form-input"
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+            />
+            <button class="btn-secondary" onClick={handleAddPhone}>추가</button>
+          </div>
+          <div class="phone-chip-list">
+            {smsNumbers.map((num) => (
+              <div key={num} class="phone-chip">
+                <span>{num}</span>
+                <XCircle size={14} class="chip-remove" onClick={() => handleRemovePhone(num)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Section 2: Sensitivity & Night Mode */}
+      <div class="galaxy-setting-group">
+        <div class="galaxy-setting-header">경계 및 보안 옵션</div>
+        <div class="galaxy-setting-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          <div class="galaxy-item-left">
+            <div class="galaxy-item-icon">
+              <Sliders size={18} />
+            </div>
+            <div>
+              <div class="galaxy-item-title">충격 감지 민감도</div>
+              <div class="galaxy-item-sub">현재 <strong>{sensitivity}단계</strong> 설정됨</div>
+            </div>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="5"
+            value={sensitivity}
+            class="form-range"
+            onChange={(e) => handleSensitivityChange(Number(e.target.value))}
+            style={{ marginTop: 4 }}
+          />
+          <div class="range-labels">
+            <span>1단계 (둔감)</span>
+            <span>3단계 (보통)</span>
+            <span>5단계 (민감)</span>
+          </div>
+        </div>
+
+        <div class="galaxy-setting-item">
+          <div class="galaxy-item-left">
+            <div class="galaxy-item-icon">
+              <Moon size={18} />
+            </div>
+            <div>
+              <div class="galaxy-item-title">야간 심야 자동 결박</div>
+              <div class="galaxy-item-sub">23:00 ~ 06:00 미확인 열림 시 즉시 결박</div>
+            </div>
+          </div>
+          <div
+            class={`toggle-switch ${nightMode ? 'active' : ''}`}
+            onClick={handleNightModeToggle}
+          >
+            <div class="toggle-handle" />
+          </div>
+        </div>
+      </div>
+
+      {/* Section 3: Device Info */}
+      <div class="galaxy-setting-group">
+        <div class="galaxy-setting-header">장치 시스템 정보</div>
+        <div class="galaxy-setting-item">
+          <div class="galaxy-item-left">
+            <div class="galaxy-item-icon"><Info size={18} /></div>
+            <div>
+              <div class="galaxy-item-title">소프트웨어 버전</div>
+              <div class="galaxy-item-sub">SafeGuard App v1.0.4 (Latest)</div>
+            </div>
+          </div>
+        </div>
+        <div class="galaxy-setting-item">
+          <div class="galaxy-item-left">
+            <div class="galaxy-item-icon"><Cpu size={18} /></div>
+            <div>
+              <div class="galaxy-item-title">디바이스 펌웨어</div>
+              <div class="galaxy-item-sub">ESP32 Firmware v2.1.0-release</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- src/components/SimulatorPanel.tsx
+
+
+
+interface SimulatorPanelProps {
+  signals: Signals;
+  onPerson: (count: number, registered: boolean) => void;
+  onToggleDoor: () => void;
+  onShock: () => void;
+  onToggleConnection: () => void;
+  onReset: () => void;
+  logs: string[];
+}
+
+const SimulatorPanel: React.FC<SimulatorPanelProps> = ({
+  signals,
+  onPerson,
+  onToggleDoor,
+  onShock,
+  onToggleConnection,
+  onReset,
+  logs,
+}) => {
+  return (
+    <div class="simulator-panel">
+      <div class="sim-header">
+        <Terminal class="green-icon" size={20} />
+        <h4>SafeGuard 시뮬레이터</h4>
+      </div>
+      <p class="sim-desc">
+        센서·AI 신호를 하나씩 넣어보세요. 상태 판단 엔진이 여러 신호를 함께 확인해 단계를 정합니다.
+      </p>
+
+      <div class="sim-btn-grid">
+        <button class="sim-btn sim-btn-watch" onClick={() => onPerson(1, false)}>
+          <UserX size={18} />
+          <span>미등록 인물</span>
+        </button>
+        <button class="sim-btn sim-btn-normal" onClick={() => onPerson(1, true)}>
+          <UserCheck size={18} />
+          <span>등록 인물</span>
+        </button>
+        <button class="sim-btn" onClick={() => onPerson(0, false)}>
+          <UserMinus size={18} />
+          <span>사람 사라짐</span>
+        </button>
+        <button class="sim-btn sim-btn-warning" onClick={onToggleDoor}>
+          <DoorOpen size={18} />
+          <span>{signals.doorOpen ? '문 닫힘' : '문 열림'}</span>
+        </button>
+        <button class="sim-btn sim-btn-intrusion" onClick={onShock}>
+          <Activity size={18} />
+          <span>충격 1회</span>
+        </button>
+        <button class="sim-btn" onClick={onToggleConnection}>
+          <WifiOff size={18} />
+          <span>{signals.connected ? '신호 끊김' : '신호 복구'}</span>
+        </button>
+        <button class="sim-btn" onClick={onReset}>
+          <RotateCcw size={18} />
+          <span>초기화</span>
+        </button>
+      </div>
+
+      <div class="sim-log-box">
+        <div class="sim-log-header">시스템 로그 콘솔</div>
+        <div class="sim-log-content">
+          {logs.map((log, index) => (
+            <div key={index}>{log}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- src/App.tsx
+
+
+
+
+
+
+
+
+
+
+
+
+const GAP_CLOSED_MM = 3;
+const GAP_OPEN_MM = 120;
+
+const initialSignals: Signals = {
+  connected: true,
+  personCount: 0,
+  personRegistered: false,
+  personConfidence: 0,
+  doorOpen: false,
+  gapMm: GAP_CLOSED_MM,
+  shockTimes: [],
+};
+
+const formatTime = (date: Date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+
+const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'home' | 'history' | 'video' | 'settings'>('home');
+
+  const [signals, setSignals] = useState<Signals>(initialSignals);
+  const [now, setNow] = useState<number>(Date.now());
+  const [latencySec, setLatencySec] = useState<number>(0.2);
+
+  const [lockFiring, setLockFiring] = useState<boolean>(false);
+  const [lastLockAt, setLastLockAt] = useState<number | null>(null);
+  const [buzzerOn, setBuzzerOn] = useState<boolean>(false);
+
+  const [notification, setNotification] = useState<PushNotificationData | null>(null);
+
+  const [settings, setSettings] = useState<DeviceSettings>({
+    smsNumbers: ['010-9876-5432', '010-1111-2222'],
+    sensitivity: 2,
+    nightMode: true,
+  });
+
+  const [events, setEvents] = useState<EventLog[]>([
+    { id: 1, type: 'normal', title: '정상 단계 복귀', time: '11:45:10' },
+    { id: 2, type: 'watch', title: '감시 단계: 미등록 인물 감지', time: '11:40:22' },
+    { id: 3, type: 'normal', title: '시스템 전원 켜짐', time: '09:00:00' },
+  ]);
+
+  const [logs, setLogs] = useState<string[]>([
+    '[System] SafeGuard 상태 판단 엔진 시작됨.',
+    '[ESP32] 센서 수집 시작 (MPU6050 · VL53L0X · 문 상태 센서)',
+  ]);
+
+  const systemState: SystemState = evaluateState(signals, now);
+  const prevStateRef = useRef<SystemState>(systemState);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      setLatencySec(0.1 + Math.round(Math.random() * 2) / 10);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const addLog = (msg: string) => {
+    setLogs((prev) => [...prev, `[${formatTime(new Date())}] ${msg}`]);
+  };
+
+  const triggerPush = (title: string, body: string) => {
+    setNotification({ title, body });
+    setTimeout(() => setNotification(null), 4500);
+  };
+
+  const addEventLog = (type: EventLog['type'], title: string) => {
+    setEvents((prev) => [
+      { id: Date.now() + Math.random(), type, title, time: formatTime(new Date()) },
+      ...prev.slice(0, 19),
+    ]);
+  };
+
+  const fireLock = (source: 'auto' | 'manual') => {
+    setLockFiring(true);
+    addLog(`[CMD] 솔레노이드 잠금핀 1회 구동 (${LOCK_PULSE_MS}ms, ${source === 'auto' ? '자동' : '수동'})`);
+    setTimeout(() => {
+      setLockFiring(false);
+      setLastLockAt(Date.now());
+      addLog('[ESP32] 잠금핀 구동 완료 응답 수신');
+    }, LOCK_PULSE_MS);
+    if (source === 'manual') addEventLog('normal', '사용자 결박 구동');
+  };
+
+  const ringBuzzer = (source: 'auto' | 'manual') => {
+    setBuzzerOn(true);
+    addLog(`[CMD] 부저 1회 (${BUZZER_MS}ms, ${source === 'auto' ? '자동' : '수동'})`);
+    setTimeout(() => setBuzzerOn(false), BUZZER_MS);
+    if (source === 'manual') addEventLog('normal', '사용자 경고음 울림');
+  };
+
+  // 단계가 바뀔 때만 알림·이력·출력 동작을 수행한다
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    if (prev === systemState) return;
+    prevStateRef.current = systemState;
+
+    const reasons = activeReasons(signals, now).join(' + ');
+    const rank: Record<SystemState, number> = { UNKNOWN: -1, NORMAL: 0, WATCH: 1, WARNING: 2, INTRUSION: 3 };
+    const escalated = rank[systemState] > rank[prev];
+
+    addLog(`[ENGINE] 상태 변경 ${prev} → ${systemState}${reasons ? ` (${reasons})` : ''}`);
+
+    switch (systemState) {
+      case 'UNKNOWN':
+        addEventLog('unknown', '판정 불가: 장치 신호 수신 없음');
+        triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
+        break;
+      case 'NORMAL':
+        addEventLog('normal', prev === 'UNKNOWN' ? '신호 복구, 정상 단계' : '정상 단계 복귀');
+        break;
+      case 'WATCH':
+        addEventLog('watch', `감시 단계: ${reasons}`);
+        if (escalated) triggerPush('감시 단계', `${reasons} 신호를 확인하고 있습니다.`);
+        break;
+      case 'WARNING':
+        addEventLog('warning', `경고 단계: ${reasons}`);
+        if (escalated) {
+          ringBuzzer('auto');
+          triggerPush('경고 단계, 부저 작동', `${reasons} 신호가 함께 감지되었습니다.`);
+        }
+        break;
+      case 'INTRUSION':
+        addEventLog('intrusion', `침입 단계: ${reasons} → 잠금핀 구동`);
+        ringBuzzer('auto');
+        fireLock('auto');
+        triggerPush('🚨 침입 판단, 잠금핀 구동', `${reasons} 신호가 모두 감지되어 잠금핀을 구동했습니다.`);
+        break;
+    }
+  }, [systemState]);
+
+  const handlePerson = (count: number, registered: boolean) => {
+    const confidence = count > 0 ? 0.9 + Math.round(Math.random() * 90) / 1000 : 0;
+    setSignals((s) => ({ ...s, personCount: count, personRegistered: registered, personConfidence: confidence }));
+    addLog(
+      count === 0
+        ? '[AI] 사람 검출 없음'
+        : `[AI] YOLO 사람 검출 (신뢰도 ${(confidence * 100).toFixed(1)}%) → 얼굴 식별: ${registered ? '등록 인물' : '미등록 인물'}`
+    );
+  };
+
+  const handleToggleDoor = () => {
+    const open = !signals.doorOpen;
+    setSignals((s) => ({ ...s, doorOpen: open, gapMm: open ? GAP_OPEN_MM : GAP_CLOSED_MM }));
+    addLog(`[ESP32] 문 상태 센서: ${open ? '열림' : '닫힘'} · 문틈 거리 ${open ? GAP_OPEN_MM : GAP_CLOSED_MM}mm`);
+  };
+
+  const handleShock = () => {
+    const t = Date.now();
+    setSignals((s) => ({ ...s, shockTimes: [...s.shockTimes.filter((x) => t - x <= 60_000), t] }));
+    setNow(t);
+    addLog('[ESP32] MPU6050 충격 감지');
+  };
+
+  const handleToggleConnection = () => {
+    setSignals((s) => ({ ...s, connected: !s.connected }));
+    addLog(signals.connected ? '[NET] 장치 신호 끊김' : '[NET] 장치 신호 복구');
+  };
+
+  const handleReset = () => {
+    setSignals(initialSignals);
+    addLog('[SIM] 신호 초기화');
+  };
+
+  const getPageTitle = () => {
+    switch (activeTab) {
+      case 'home': return '우리집 현관문';
+      case 'history': return '이력 및 감지 로그';
+      case 'video': return '현관 영상';
+      case 'settings': return 'SafeGuard 설정';
+    }
+  };
+
+  const currentTime = formatTime(new Date(now)).slice(0, 5);
+
+  return (
+    <div class="app-layout">
+      <div class="phone-frame">
+        {/* Status Bar */}
+        <div class="status-bar">
+          <span class="time">{currentTime}</span>
+          <div class="notch" />
+          <div class="status-icons">
+            <Wifi size={16} />
+            <Battery size={16} />
+          </div>
+        </div>
+
+        {/* Push Notification */}
+        <PushNotification notification={notification} />
+
+        {/* Header */}
+        <Header title={getPageTitle()} connected={signals.connected} />
+
+        {/* Dynamic Page Views */}
+        <main class="app-content">
+          {activeTab === 'home' && (
+            <>
+              <StatusCard
+                systemState={systemState}
+                signals={signals}
+                latencySec={signals.connected ? latencySec : null}
+              />
+              <QuickControls
+                connected={signals.connected}
+                lockFiring={lockFiring}
+                buzzerOn={buzzerOn}
+                lastLockAt={lastLockAt}
+                now={now}
+                onFireLock={() => fireLock('manual')}
+                onRingBuzzer={() => ringBuzzer('manual')}
+              />
+            </>
+          )}
+
+          {activeTab === 'history' && (
+            <HistoryPage
+              events={events}
+              onRefresh={() => addLog('[API] 이벤트 이력 동기화 완료')}
+            />
+          )}
+
+          {activeTab === 'video' && <VideoPage signals={signals} now={now} />}
+
+          {activeTab === 'settings' && (
+            <SettingsPage
+              settings={settings}
+              onSaveSettings={(newSet) => {
+                setSettings(newSet);
+                addLog(`[SETTINGS SAVE] 비상 SMS 목록: [${newSet.smsNumbers.join(', ')}] 저장완료`);
+              }}
+            />
+          )}
+        </main>
+
+        {/* Bottom Nav (탭 변경 연동) */}
+        <nav class="bottom-nav">
+          <button
+            class={`nav-item ${activeTab === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveTab('home')}
+          >
+            <Shield size={20} />
+            <span>보안 홈</span>
+          </button>
+          <button
+            class={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            <History size={20} />
+            <span>이력</span>
+          </button>
+          <button
+            class={`nav-item ${activeTab === 'video' ? 'active' : ''}`}
+            onClick={() => setActiveTab('video')}
+          >
+            <Video size={20} />
+            <span>영상</span>
+          </button>
+          <button
+            class={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <Settings size={20} />
+            <span>설정</span>
+          </button>
+        </nav>
+        <div class="home-indicator" />
+      </div>
+
+      {/* Simulator Panel */}
+      <SimulatorPanel
+        signals={signals}
+        onPerson={handlePerson}
+        onToggleDoor={handleToggleDoor}
+        onShock={handleShock}
+        onToggleConnection={handleToggleConnection}
+        onReset={handleReset}
+        logs={logs}
+      />
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+  try {
+    var src = document.getElementById('app-source').textContent;
+    var out = Babel.transform(src, {
+      filename: 'app.tsx',
+      presets: [['typescript', { isTSX: true, allExtensions: true }], 'react'],
+    }).code;
+    new Function(out)();
+  } catch (e) {
+    document.getElementById('root').innerHTML =
+      '<pre style="color:#E11D48;white-space:pre-wrap;padding:20px">미리보기 오류:\n' + String(e && e.stack || e) + '</pre>';
+    console.error(e);
+  }
+</script>
+</body>
+</html>

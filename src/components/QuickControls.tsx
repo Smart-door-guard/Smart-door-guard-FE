@@ -1,60 +1,87 @@
 import React from 'react';
-import { Lock, Compass } from 'lucide-react';
+import { Lock, Bell, Check } from 'lucide-react';
+
+export const LOCK_PULSE_MS = 300;
+export const BUZZER_MS = 1000;
 
 interface QuickControlsProps {
-  isLocked: boolean;
-  doorAngle: number;
-  onToggleLock: () => void;
-  onChangeAngle: (angle: number) => void;
+  connected: boolean;
+  lockFiring: boolean;
+  buzzerOn: boolean;
+  lastLockAt: number | null;
+  now: number;
+  onFireLock: () => void;
+  onRingBuzzer: () => void;
 }
 
-export const QuickControls: React.FC<QuickControlsProps> = ({
-  isLocked,
-  doorAngle,
-  onToggleLock,
-  onChangeAngle,
-}) => {
-  const angles = [15, 30, 45, 60];
+const formatAgo = (ms: number) => {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return `${sec}초 전`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}분 전`;
+  return `${Math.floor(min / 60)}시간 전`;
+};
 
+export const QuickControls: React.FC<QuickControlsProps> = ({
+  connected,
+  lockFiring,
+  buzzerOn,
+  lastLockAt,
+  now,
+  onFireLock,
+  onRingBuzzer,
+}) => {
   return (
     <section class="section-container">
       <h3 class="section-title">빠른 제어</h3>
       <div class="quick-grid">
-        <button class="quick-card" onClick={onToggleLock}>
-          <div class={`quick-icon-wrapper ${isLocked ? 'active' : ''}`}>
-            <Lock size={20} />
+        <div class="quick-card control-card">
+          <div class="control-row">
+            <div class={`quick-icon-wrapper ${lockFiring ? 'active' : ''}`}>
+              <Lock size={20} />
+            </div>
+            <div class="quick-info">
+              <span class="quick-title">결박 구동</span>
+              <span class="quick-status">눌러서 1회 구동 · {LOCK_PULSE_MS}ms</span>
+            </div>
+            <button
+              class="action-btn primary"
+              disabled={!connected || lockFiring}
+              onClick={onFireLock}
+            >
+              {lockFiring ? '구동 중' : '구동'}
+            </button>
           </div>
-          <div class="quick-info">
-            <span class="quick-title">비상 결박 제어</span>
-            <span class="quick-status">
-              {isLocked ? '강철 암이 문을 결박함' : '터치하여 즉시 결박'}
+          <div class="control-footer">
+            <span class="control-footer-left">
+              {lastLockAt === null ? (
+                '구동 기록 없음'
+              ) : (
+                <>
+                  <Check size={14} /> 마지막 구동 확인 · {formatAgo(now - lastLockAt)}
+                </>
+              )}
             </span>
+            <span class="control-footer-right">잠금 상태 확인 불가</span>
           </div>
-          <div class={`toggle-switch ${isLocked ? 'active' : ''}`}>
-            <div class="toggle-handle" />
-          </div>
-        </button>
+        </div>
 
-        <div class="quick-card angle-card">
-          <div class="quick-card-header">
-            <div class="quick-icon-wrapper green-bg">
-              <Compass size={20} />
+        <div class="quick-card control-card">
+          <div class="control-row">
+            <div class={`quick-icon-wrapper ${buzzerOn ? 'active' : ''}`}>
+              <Bell size={20} />
             </div>
-            <div style={{ marginLeft: 16 }}>
-              <span class="quick-title">안전 개방 각도</span>
-              <span class="quick-status">현재 {doorAngle}° 설정</span>
+            <div class="quick-info">
+              <span class="quick-title">경고음 울리기</span>
+              <span class="quick-status">부저 1회 · {BUZZER_MS}ms</span>
             </div>
-          </div>
-          <div class="angle-presets">
-            {angles.map((ang) => (
-              <button
-                key={ang}
-                class={`preset-chip ${doorAngle === ang ? 'active' : ''}`}
-                onClick={() => onChangeAngle(ang)}
-              >
-                {ang}°
-              </button>
-            ))}
+            <button
+              class="action-btn secondary"
+              disabled={!connected || buzzerOn}
+              onClick={onRingBuzzer}
+            >
+              {buzzerOn ? '울리는 중' : '울리기'}
+            </button>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, ShieldAlert, AlertTriangle, UserCheck, CheckCircle } from 'lucide-react';
+import { RefreshCw, ShieldAlert, ShieldQuestion, AlertTriangle, Eye, CheckCircle } from 'lucide-react';
 import { EventLog } from '../types';
 
 interface HistoryPageProps {
@@ -22,7 +22,8 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ events, onRefresh }) =
     switch (type) {
       case 'intrusion': return <ShieldAlert size={18} />;
       case 'warning': return <AlertTriangle size={18} />;
-      case 'watch': return <UserCheck size={18} />;
+      case 'watch': return <Eye size={18} />;
+      case 'unknown': return <ShieldQuestion size={18} />;
       default: return <CheckCircle size={18} />;
     }
   };
@@ -32,6 +33,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ events, onRefresh }) =
       case 'intrusion': return 'type-intrusion';
       case 'warning': return 'type-warning';
       case 'watch': return 'type-watch';
+      case 'unknown': return 'type-unknown';
       default: return 'type-normal';
     }
   };

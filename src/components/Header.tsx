@@ -3,9 +3,10 @@ import { Home } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
+  connected: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ title }) => {
+export const Header: React.FC<HeaderProps> = ({ title, connected }) => {
   return (
     <header class="app-header">
       <div class="header-left">
@@ -15,9 +16,9 @@ export const Header: React.FC<HeaderProps> = ({ title }) => {
         </div>
       </div>
       <div class="header-right">
-        <div class="connection-badge online">
+        <div class={`connection-badge ${connected ? 'online' : 'offline'}`}>
           <span class="pulse-dot"></span>
-          <span>MQTT 연결됨</span>
+          <span>{connected ? '장치 연결됨' : '연결 끊김'}</span>
         </div>
       </div>
     </header>
