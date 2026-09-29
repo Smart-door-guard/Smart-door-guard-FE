@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { X, XCircle } from 'lucide-react';
 import { DeviceSettings } from '../types';
 
@@ -43,71 +43,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div class="modal-overlay active">
-      <div class="modal-content">
-        <div class="modal-header">
+    <div className="modal-overlay active">
+      <div className="modal-content">
+        <div className="modal-header">
           <h3>스마트 가드 경계 설정</h3>
-          <button class="modal-close" onClick={onClose}>
+          <button className="modal-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
 
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">비상 SMS 수신 번호</label>
-            <div class="input-with-btn">
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">비상 SMS 수신 번호</label>
+            <div className="input-with-btn">
               <input
                 type="tel"
                 placeholder="010-1234-5678"
-                class="form-input"
+                className="form-input"
                 value={phoneInput}
                 onChange={(e) => setPhoneInput(e.target.value)}
               />
-              <button class="btn-secondary" onClick={handleAddPhone}>추가</button>
+              <button className="btn-secondary" onClick={handleAddPhone}>추가</button>
             </div>
-            <div class="phone-chip-list">
+            <div className="phone-chip-list">
               {smsNumbers.map((num) => (
-                <div key={num} class="phone-chip">
+                <div key={num} className="phone-chip">
                   <span>{num}</span>
-                  <XCircle size={14} class="chip-remove" onClick={() => handleRemovePhone(num)} />
+                  <XCircle size={14} className="chip-remove" onClick={() => handleRemovePhone(num)} />
                 </div>
               ))}
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">충격 감지 민감도 (단계: {sensitivity})</label>
+          <div className="form-group">
+            <label className="form-label">충격 감지 민감도 (단계: {sensitivity})</label>
             <input
               type="range"
               min="1"
               max="5"
               value={sensitivity}
-              class="form-range"
+              className="form-range"
               onChange={(e) => setSensitivity(Number(e.target.value))}
             />
-            <div class="range-labels">
+            <div className="range-labels">
               <span>둔감 (1)</span>
               <span>보통 (3)</span>
               <span>민감 (5)</span>
             </div>
           </div>
 
-          <div class="form-group flex-between">
+          <div className="form-group flex-between">
             <div>
-              <div class="form-label">야간 심야 자동 결박</div>
-              <div class="form-subtext">23:00 ~ 06:00 미확인 열림 시 즉시 결박</div>
+              <div className="form-label">야간 심야 자동 결박</div>
+              <div className="form-subtext">23:00 ~ 06:00 미확인 열림 시 즉시 결박</div>
             </div>
             <div
-              class={`toggle-switch ${nightMode ? 'active' : ''}`}
+              className={`toggle-switch ${nightMode ? 'active' : ''}`}
               onClick={() => setNightMode(!nightMode)}
             >
-              <div class="toggle-handle" />
+              <div className="toggle-handle" />
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn-primary" onClick={handleSave}>설정 저장</button>
+        <div className="modal-footer">
+          <button className="btn-primary" onClick={handleSave}>설정 저장</button>
         </div>
       </div>
     </div>

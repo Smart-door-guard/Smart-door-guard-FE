@@ -1,32 +1,49 @@
 import React from 'react';
 import { ShieldCheck, ShieldAlert, ShieldQuestion, AlertTriangle, Eye } from 'lucide-react';
-import { Signals, SystemState } from '../types';
+import { MissingSignal, Signals, SystemState } from '../types';
 
 interface StatusCardProps {
   systemState: SystemState;
   signals: Signals;
   latencySec: number | null;
+  degraded?: boolean;
+  missing?: MissingSignal[];
 }
 
-export const StatusCard: React.FC<StatusCardProps> = ({ systemState, signals, latencySec }) => {
+/** missing 코드 → 한국어 */
+const MISSING_LABEL: Record<MissingSignal, string> = {
+  doorOpen: '문 열림 여부 모름',
+  shock: '충격 모름',
+  person: '사람 모름',
+};
+
+export const StatusCard: React.FC<StatusCardProps> = ({
+  systemState,
+  signals,
+  latencySec,
+  degraded = false,
+  missing = [],
+}) => {
   const getStrokeDashOffset = () => {
     const totalDash = 534;
     switch (systemState) {
-      case 'UNKNOWN': return 0;
-      case 'NORMAL': return 0;
-      case 'WATCH': return totalDash * 0.35;
-      case 'WARNING': return totalDash * 0.65;
+      case 'UNKNOWN':   return totalDash;   // 링이 비어 있다
+      case 'NORMAL':    return 0;
+      case 'WATCH':     return totalDash * 0.35;
+      case 'WARNING':   return totalDash * 0.65;
       case 'INTRUSION': return totalDash * 0.95;
+      default:          return totalDash;
     }
   };
 
   const getStrokeColor = () => {
     switch (systemState) {
-      case 'UNKNOWN': return '#CBD5E1';
-      case 'NORMAL': return '#10B981';
-      case 'WATCH': return '#F59E0B';
-      case 'WARNING': return '#EA580C';
+      case 'UNKNOWN':   return '#CBD5E1';
+      case 'NORMAL':    return '#10B981';
+      case 'WATCH':     return '#F59E0B';
+      case 'WARNING':   return '#EA580C';
       case 'INTRUSION': return '#E11D48';
+      default:          return '#CBD5E1';
     }
   };
 
@@ -86,11 +103,24 @@ export const StatusCard: React.FC<StatusCardProps> = ({ systemState, signals, la
           pillText: '잠금핀 구동',
           pillClass: 'state-intrusion',
           gaugeText: '침입',
-          subText: '사람 · 문 열림 · 충격 반복',
+          subText: '운영자 확인(ack) 전까지 유지',
           bg: 'linear-gradient(145deg, #FFFFFF 0%, #FFF1F2 100%)',
           iconBg: '#FFE4E6',
           iconColor: '#E11D48',
           Icon: ShieldAlert,
+        };
+      default:
+        // 예상 외 값 — UNKNOWN과 동일하게 처리 (TypeError 방지)
+        return {
+          title: '판정 불가 (UNKNOWN)',
+          pillText: '신호 없음',
+          pillClass: 'state-unknown',
+          gaugeText: '판정 불가',
+          subText: '장치 상태를 알 수 없습니다',
+          bg: 'linear-gradient(145deg, #FFFFFF 0%, #F1F5F9 100%)',
+          iconBg: '#E2E8F0',
+          iconColor: '#64748B',
+          Icon: ShieldQuestion,
         };
     }
   };
@@ -99,29 +129,61 @@ export const StatusCard: React.FC<StatusCardProps> = ({ systemState, signals, la
   const StateIcon = info.Icon;
   const connected = signals.connected;
 
-  const doorText = !connected ? '—' : signals.doorOpen ? '열림' : '닫힘';
+  // null = "모름" — false나 0으로 대체하지 않는다
+  const doorText = !connected
+    ? '—'
+    : signals.doorOpen === null
+      ? '모름'
+      : signals.doorOpen
+        ? '열림'
+        : '닫힘';
+
   const personText = !connected
     ? '—'
-    : signals.personCount === 0
-      ? '없음'
-      : `${signals.personCount}명 · ${signals.personRegistered ? '등록' : '미등록'}`;
+    : signals.personCount === null
+      ? '모름'
+      : signals.personCount === 0
+        ? '없음'
+        : `${signals.personCount}명 · ${
+            signals.personRegistered === null
+              ? '식별 불가'
+              : signals.personRegistered
+                ? '등록'
+                : '미등록'
+          }`;
+
   const latencyText = latencySec === null ? '—' : `${latencySec.toFixed(1)}초`;
 
   return (
-    <section class="card status-card" style={{ background: info.bg }}>
-      <div class="card-header">
+    <section className="card status-card" style={{ background: info.bg }}>
+      <div className="card-header">
         <div>
-          <span class="card-subtitle">SYSTEM STATUS</span>
-          <h2 class="card-title">{info.title}</h2>
+          <span className="card-subtitle">SYSTEM STATUS</span>
+          <h2 className="card-title">{info.title}</h2>
         </div>
-        <span class={`status-pill ${info.pillClass}`}>{info.pillText}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span className={`status-pill ${info.pillClass}`}>{info.pillText}</span>
+          {/* degraded 배지 — 신호 일부가 누락된 상태에서 판정 중 */}
+          {degraded && (
+            <span className="status-pill state-degraded">⚠ 기능 저하</span>
+          )}
+        </div>
       </div>
 
-      <div class="gauge-container">
-        <svg class="gauge-svg" viewBox="0 0 200 200">
-          <circle class="gauge-bg" cx="100" cy="100" r="85" />
+      {/* missing 신호 목록 */}
+      {missing.length > 0 && (
+        <div className="missing-signals">
+          {missing.map((m) => (
+            <span key={m} className="missing-tag">{MISSING_LABEL[m]}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="gauge-container">
+        <svg className="gauge-svg" viewBox="0 0 200 200">
+          <circle className="gauge-bg" cx="100" cy="100" r="85" />
           <circle
-            class="gauge-progress"
+            className="gauge-progress"
             cx="100"
             cy="100"
             r="85"
@@ -131,29 +193,29 @@ export const StatusCard: React.FC<StatusCardProps> = ({ systemState, signals, la
             }}
           />
         </svg>
-        <div class="gauge-center">
-          <div class="shield-circle" style={{ background: info.iconBg, color: info.iconColor }}>
+        <div className="gauge-center">
+          <div className="shield-circle" style={{ background: info.iconBg, color: info.iconColor }}>
             <StateIcon size={28} />
           </div>
-          <span class="gauge-state-text" style={{ color: info.iconColor }}>{info.gaugeText}</span>
-          <span class="gauge-sub-text">{info.subText}</span>
+          <span className="gauge-state-text" style={{ color: info.iconColor }}>{info.gaugeText}</span>
+          <span className="gauge-sub-text">{info.subText}</span>
         </div>
       </div>
 
-      <div class="door-stats-grid">
-        <div class="stat-box">
-          <span class="stat-label">문 상태</span>
-          <div class="stat-value" style={{ color: signals.doorOpen && connected ? '#EA580C' : undefined }}>
+      <div className="door-stats-grid">
+        <div className="stat-box">
+          <span className="stat-label">문 상태</span>
+          <div className="stat-value" style={{ color: signals.doorOpen === true && connected ? '#EA580C' : undefined }}>
             {doorText}
           </div>
         </div>
-        <div class="stat-box">
-          <span class="stat-label">사람 감지</span>
-          <div class="stat-value">{personText}</div>
+        <div className="stat-box">
+          <span className="stat-label">사람 감지</span>
+          <div className="stat-value">{personText}</div>
         </div>
-        <div class="stat-box">
-          <span class="stat-label">신호 지연</span>
-          <div class="stat-value">{latencyText}</div>
+        <div className="stat-box">
+          <span className="stat-label">신호 지연</span>
+          <div className="stat-value">{latencyText}</div>
         </div>
       </div>
     </section>

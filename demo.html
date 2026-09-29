@@ -178,9 +178,10 @@
           </div>
         </div>
         <div class="header-right">
-          <div class="connection-badge online">
+          <!-- "MQTT 연결됨" 제거: 실제로 MQTT를 구독하지 않는 하드코딩 텍스트 -->
+          <div class="connection-badge offline">
             <span class="pulse-dot"></span>
-            <span>MQTT 연결됨</span>
+            <span>데모 모드</span>
           </div>
         </div>
       </header>
@@ -236,34 +237,35 @@
           <section class="section-container">
             <h3 class="section-title">빠른 제어</h3>
             <div class="quick-grid">
-              <button class="quick-card" id="btn-toggle-lock">
-                <div class="quick-icon-wrapper" id="lock-icon-wrapper">
-                  <i data-lucide="lock"></i>
+              <!-- 솔레노이드 1회 구동 (토글 아님 — 잠금 상태를 알 수 없으므로) -->
+              <div class="quick-card control-card">
+                <div class="control-row">
+                  <div class="quick-icon-wrapper" id="lock-icon-wrapper">
+                    <i data-lucide="lock"></i>
+                  </div>
+                  <div class="quick-info">
+                    <span class="quick-title">결박 구동</span>
+                    <span class="quick-status">눌러서 1회 구동 · 300ms</span>
+                  </div>
+                  <button class="action-btn primary" id="btn-fire-solenoid">구동</button>
                 </div>
-                <div class="quick-info">
-                  <span class="quick-title">비상 결박 제어</span>
-                  <span class="quick-status" id="quick-lock-status">터치하여 즉시 결박</span>
+                <div class="control-footer">
+                  <span class="control-footer-left" id="solenoid-last-time">구동 기록 없음</span>
+                  <span class="control-footer-right">잠금 상태 확인 불가</span>
                 </div>
-                <div class="toggle-switch" id="lock-toggle-switch">
-                  <div class="toggle-handle"></div>
-                </div>
-              </button>
+              </div>
 
-              <div class="quick-card angle-card">
-                <div class="quick-card-header">
-                  <div class="quick-icon-wrapper green-bg">
-                    <i data-lucide="compass"></i>
+              <!-- 부저 1회 -->
+              <div class="quick-card control-card">
+                <div class="control-row">
+                  <div class="quick-icon-wrapper" id="buzzer-icon-wrapper">
+                    <i data-lucide="bell"></i>
                   </div>
-                  <div style="margin-left: 16px;">
-                    <span class="quick-title">안전 개방 각도</span>
-                    <span class="quick-status" id="angle-display-value">현재 30° 설정</span>
+                  <div class="quick-info">
+                    <span class="quick-title">경고음 울리기</span>
+                    <span class="quick-status">부저 1회 · 1000ms</span>
                   </div>
-                </div>
-                <div class="angle-presets">
-                  <button class="preset-chip" data-angle="15">15°</button>
-                  <button class="preset-chip active" data-angle="30">30°</button>
-                  <button class="preset-chip" data-angle="45">45°</button>
-                  <button class="preset-chip" data-angle="60">60°</button>
+                  <button class="action-btn secondary" id="btn-fire-buzzer">울리기</button>
                 </div>
               </div>
             </div>
@@ -563,13 +565,8 @@
       const gaugeStateText = document.getElementById('gauge-state-text');
       const gaugeSubText = document.getElementById('gauge-sub-text');
       const statusCardBg = document.getElementById('status-card-bg');
-      const textLock = document.getElementById('text-lock');
       const textDoor = document.getElementById('text-door');
 
-      const btnToggleLock = document.getElementById('btn-toggle-lock');
-      const lockIconWrapper = document.getElementById('lock-icon-wrapper');
-      const lockToggleSwitch = document.getElementById('lock-toggle-switch');
-      const quickLockStatus = document.getElementById('quick-lock-status');
       const boundingBox = document.getElementById('bounding-box');
       const detectedObjectText = document.getElementById('detected-object-text');
       const pushNotification = document.getElementById('push-notification');
@@ -648,30 +645,46 @@
             break;
         }
 
-        if (state.isLocked) {
-          textLock.textContent = '자동 결박됨';
-          textLock.style.color = '#10B981';
-          lockIconWrapper.classList.add('active');
-          lockToggleSwitch.classList.add('active');
-          quickLockStatus.textContent = '강철 암이 문을 결박함';
-        } else {
-          textLock.textContent = '결박 해제됨';
-          textLock.style.color = '#64748B';
-          lockIconWrapper.classList.remove('active');
-          lockToggleSwitch.classList.remove('active');
-          quickLockStatus.textContent = '터치하여 즉시 결박';
-        }
-
         if (state.doorOpen) {
-          textDoor.textContent = `열림 (${state.doorAngle}°)`;
+          textDoor.textContent = `열림`;
           textDoor.style.color = '#EA580C';
         } else {
-          textDoor.textContent = `닫힘 (0°)`;
+          textDoor.textContent = `닫힘`;
           textDoor.style.color = '#0F172A';
         }
 
         renderEvents();
         renderPhoneChips();
+      }
+
+      // 1회 구동 버튼 (솔레노이드)
+      const btnFireSolenoid = document.getElementById('btn-fire-solenoid');
+      if (btnFireSolenoid) {
+        btnFireSolenoid.addEventListener('click', () => {
+          btnFireSolenoid.textContent = '구동 중';
+          btnFireSolenoid.disabled = true;
+          logSim('[DEMO] 솔레노이드 1회 구동 300ms');
+          const lastEl = document.getElementById('solenoid-last-time');
+          setTimeout(() => {
+            btnFireSolenoid.textContent = '구동';
+            btnFireSolenoid.disabled = false;
+            if (lastEl) lastEl.textContent = '방금 구동';
+          }, 300);
+        });
+      }
+
+      // 1회 부저
+      const btnFireBuzzer = document.getElementById('btn-fire-buzzer');
+      if (btnFireBuzzer) {
+        btnFireBuzzer.addEventListener('click', () => {
+          btnFireBuzzer.textContent = '울리는 중';
+          btnFireBuzzer.disabled = true;
+          logSim('[DEMO] 부저 1회 1000ms');
+          setTimeout(() => {
+            btnFireBuzzer.textContent = '울리기';
+            btnFireBuzzer.disabled = false;
+          }, 1000);
+        });
       }
 
       function triggerPush(title, body) {
@@ -758,7 +771,6 @@
       document.getElementById('sim-btn-normal').addEventListener('click', () => {
         state.systemState = 'NORMAL';
         state.doorOpen = false;
-        state.isLocked = false;
         logSim('[EVENT] 상태: NORMAL | 문 닫힘, 경계 중');
         addEventLog('normal', '정상 관제 복귀');
         renderApp();
@@ -775,19 +787,18 @@
       document.getElementById('sim-btn-warning').addEventListener('click', () => {
         state.systemState = 'WARNING';
         state.doorOpen = true;
-        logSim('[MQTT EVENT] sg/device_01/event -> {"type": "door_open", "angle": 30}');
+        logSim('[MQTT EVENT] sg/device_01/event -> {"type": "door_open"}');
         triggerPush('문 열림 경고!', '외부인 접근 상태에서 현관문이 열렸습니다!');
-        addEventLog('warning', '주의: 접근 중 문 열림 감지 (각도 30°)');
+        addEventLog('warning', '주의: 접근 중 문 열림 감지');
         renderApp();
       });
 
       document.getElementById('sim-btn-intrusion').addEventListener('click', () => {
         state.systemState = 'INTRUSION';
         state.doorOpen = true;
-        state.isLocked = true;
-        logSim('[CRITICAL INTRUSION] 연속 충격 2.4G 감지 -> 강철 암 자동 결박 실행! SMS 발송 중...');
-        triggerPush('🚨 침입 경보 발생!', '강한 충격 감지! 강철 암 결박 및 비상 SMS 발송이 완료되었습니다.');
-        addEventLog('intrusion', '🚨 비상: 침입 확정! 강철 암 자동 결박 실행');
+        logSim('[CRITICAL INTRUSION] 연속 충격 2.4G 감지 -> SMS 발송 중...');
+        triggerPush('🚨 침입 경보 발생!', '강한 충격 감지! 비상 SMS 발송이 완료되었습니다.');
+        addEventLog('intrusion', '🚨 비상: 침입 확정! 서버 자동 대응 실행');
         renderApp();
       });
 

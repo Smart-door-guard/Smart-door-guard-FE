@@ -863,3 +863,208 @@ body {
 /* 하단 탭 클릭 시 브라우저 기본 포커스 테두리 제거 (키보드 포커스는 유지) */
 .nav-item:focus:not(:focus-visible) { outline: none; }
 .nav-item:focus-visible { outline: 2px solid var(--primary-green); outline-offset: -2px; border-radius: 12px; }
+
+
+/* ==========================================================================
+   📱 폰 반응형 — ≤768px
+   실제 폰으로 열면 phone-frame 테두리/노치/가짜 status-bar가 필요 없다.
+   진짜 폰엔 이미 있기 때문이다.
+   시뮬레이터 패널도 숨긴다 — 관객이 보면 안 된다.
+   ========================================================================== */
+@media (max-width: 768px) {
+  body {
+    background-color: var(--phone-bg);
+    padding: 0;
+    align-items: flex-start;
+  }
+
+  .app-layout {
+    flex-direction: column;
+    max-width: 100%;
+    width: 100%;
+    gap: 0;
+  }
+
+  /* phone-frame: 테두리·노치·둥근 모서리 전부 제거, 전체 폭 사용 */
+  .phone-frame {
+    width: 100%;
+    height: 100dvh;          /* dynamic viewport height: 주소창 고려 */
+    border-radius: 0;
+    box-shadow: none;
+    min-height: -webkit-fill-available;
+  }
+
+  /* 가짜 status-bar (시계·배터리) 숨김 — 진짜 폰엔 OS가 표시한다 */
+  .status-bar {
+    display: none;
+  }
+
+  /* Dynamic Island 노치도 숨김 */
+  .notch {
+    display: none;
+  }
+
+  /* 시뮬레이터 패널 숨김 */
+  .simulator-panel {
+    display: none;
+  }
+
+  /* 푸시 알림: status-bar가 없으니 위치 조정 */
+  .push-notification.active {
+    top: 12px;
+  }
+
+  /* 앱 헤더: 좌우 여백 축소 */
+  .app-header {
+    padding: 10px 16px;
+  }
+
+  /* 콘텐츠 영역: 좌우 여백 축소 */
+  .app-content {
+    padding: 10px 14px 100px;
+  }
+
+  /* 하단 네비게이션: safe area 고려 */
+  .bottom-nav {
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+  }
+
+  /* home-indicator: 실제 폰엔 OS 홈 인디케이터가 있으므로 숨김 */
+  .home-indicator {
+    display: none;
+  }
+}
+
+
+/* degraded 배지 */
+.state-degraded {
+  background: #FFF3E0;
+  color: #E65100;
+  border: 1px solid #FFCC80;
+  font-size: 11px;
+}
+
+/* missing 신호 표시 영역 */
+.missing-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.missing-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #FFF8E1;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+
+
+/* ── 빠른 제어 에러/쿨다운 배너 ──────────────────────────────────────── */
+.action-error {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #FFF1F2;
+  color: #E11D48;
+  border: 1px solid #FECDD3;
+}
+
+.action-error.cooldown {
+  background: #FFF8E1;
+  color: #B45309;
+  border-color: #FDE68A;
+}
+
+/* controls.reason 배너 */
+.controls-reason-banner {
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #F1F5F9;
+  color: var(--text-muted);
+  border: 1px solid var(--card-border);
+}
+
+/* ── 헤더 degraded 배지 ────────────────────────────────────────────── */
+.degraded-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #FFF3E0;
+  color: #E65100;
+  border: 1px solid #FFCC80;
+}
+
+/* ── 이력 탭 비어있을 때 ────────────────────────────────────────────── */
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── 토큰 없음 화면 ─────────────────────────────────────────────────── */
+.no-token-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #E2E8F0;
+  padding: 24px;
+}
+
+.no-token-card {
+  background: #FFFFFF;
+  border-radius: 28px;
+  padding: 40px 32px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.no-token-icon {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.no-token-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.no-token-body {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.no-token-hint {
+  font-size: 12px;
+  color: var(--text-light);
+  line-height: 1.5;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+}

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { PushNotificationData } from '../types';
 
@@ -8,16 +8,16 @@ interface PushNotificationProps {
 
 export const PushNotification: React.FC<PushNotificationProps> = ({ notification }) => {
   return (
-    <div class={`push-notification ${notification ? 'active' : ''}`}>
-      <div class="push-icon-box">
+    <div className={`push-notification ${notification ? 'active' : ''}`}>
+      <div className="push-icon-box">
         <ShieldAlert size={22} />
       </div>
-      <div class="push-content">
-        <div class="push-header">
-          <span class="push-title">{notification?.title}</span>
-          <span class="push-time">방금 전</span>
+      <div className="push-content">
+        <div className="push-header">
+          <span className="push-title">{notification?.title}</span>
+          <span className="push-time">방금 전</span>
         </div>
-        <p class="push-body">{notification?.body}</p>
+        <p className="push-body">{notification?.body}</p>
       </div>
     </div>
   );

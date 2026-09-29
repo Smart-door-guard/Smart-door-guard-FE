@@ -1,24 +1,63 @@
 import React from 'react';
 import { Home } from 'lucide-react';
+import type { WsStatus } from '../api/wsClient';
 
 interface HeaderProps {
   title: string;
   connected: boolean;
+  degraded?: boolean;
+  wsStatus?: WsStatus;
+  isMockMode?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ title, connected }) => {
+export const Header: React.FC<HeaderProps> = ({
+  title,
+  connected,
+  degraded = false,
+  wsStatus,
+  isMockMode = false,
+}) => {
+  // 연결 배지 텍스트/클래스 결정
+  const getBadge = () => {
+    if (isMockMode) {
+      return {
+        cls: connected ? 'online' : 'offline',
+        label: connected ? '시뮬레이터' : '연결 끊김',
+      };
+    }
+    switch (wsStatus) {
+      case 'connected':
+        return { cls: 'online', label: '장치 연결됨' };
+      case 'connecting':
+        return { cls: 'offline', label: '연결 중…' };
+      case 'auth_failed':
+        return { cls: 'offline', label: '인증 실패' };
+      case 'capacity':
+        return { cls: 'offline', label: '연결 대기 중' };
+      case 'disconnected':
+      default:
+        return { cls: 'offline', label: '연결 끊김' };
+    }
+  };
+
+  const badge = getBadge();
+
   return (
-    <header class="app-header">
-      <div class="header-left">
-        <div class="home-selector">
-          <Home class="green-icon" size={20} />
-          <span class="home-name">{title}</span>
+    <header className="app-header">
+      <div className="header-left">
+        <div className="home-selector">
+          <Home className="green-icon" size={20} />
+          <span className="home-name">{title}</span>
         </div>
       </div>
-      <div class="header-right">
-        <div class={`connection-badge ${connected ? 'online' : 'offline'}`}>
-          <span class="pulse-dot"></span>
-          <span>{connected ? '장치 연결됨' : '연결 끊김'}</span>
+      <div className="header-right">
+        {/* degraded 배지 — 신호 일부가 누락된 상태에서 판정 중 */}
+        {degraded && !isMockMode && (
+          <span className="degraded-badge">⚠ 기능 저하</span>
+        )}
+        <div className={`connection-badge ${badge.cls}`}>
+          <span className="pulse-dot"></span>
+          <span>{badge.label}</span>
         </div>
       </div>
     </header>

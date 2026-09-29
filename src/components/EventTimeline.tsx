@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ShieldAlert, AlertTriangle, UserCheck, CheckCircle } from 'lucide-react';
 import { EventLog } from '../types';
 
@@ -30,21 +30,21 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({ events }) => {
   };
 
   return (
-    <section class="section-container">
-      <div class="section-header-flex">
-        <h3 class="section-title">최근 이력 로그</h3>
-        <button class="text-button">새로고침</button>
+    <section className="section-container">
+      <div className="section-header-flex">
+        <h3 className="section-title">최근 이력 로그</h3>
+        <button className="text-button">새로고침</button>
       </div>
 
-      <div class="event-list">
+      <div className="event-list">
         {events.map((evt) => (
-          <div key={evt.id} class="event-item">
-            <div class={`event-icon-box ${getEventClass(evt.type)}`}>
+          <div key={evt.id} className="event-item">
+            <div className={`event-icon-box ${getEventClass(evt.type)}`}>
               {getEventIcon(evt.type)}
             </div>
-            <div class="event-details">
-              <div class="event-title-text">{evt.title}</div>
-              <div class="event-time-text">{evt.time}</div>
+            <div className="event-details">
+              <div className="event-title-text">{evt.title}</div>
+              <div className="event-time-text">{evt.time}</div>
             </div>
           </div>
         ))}
