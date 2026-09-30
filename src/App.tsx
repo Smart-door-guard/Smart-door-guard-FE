@@ -441,7 +441,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {activeTab === 'video' && <VideoPage signals={signals} now={now} />}
+          {activeTab === 'video' && <VideoPage signals={signals} now={now} isMockMode={isMockMode} />}
 
           {activeTab === 'settings' && (
             <SettingsPage

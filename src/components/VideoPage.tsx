@@ -2,17 +2,14 @@ import React from 'react';
 import { Activity, DoorOpen, Ruler, User } from 'lucide-react';
 import { Signals } from '../types';
 import { AiDetectionCard } from './AiDetectionCard';
+import { LiveVideoCard } from './LiveVideoCard';
 import { SHOCK_REPEAT_COUNT, SHOCK_WINDOW_MS, recentShocks } from '../stateEngine';
-
-// ─────────────────────────────────────────────────────────────
-// 영상 소스 상수 — 나중에 프록시 경로가 생기면 여기만 바꾸면 된다
-// 예: export const STREAM_URL = '/api/camera/stream';
-// ─────────────────────────────────────────────────────────────
-export const STREAM_URL: string | null = null; // null이면 스냅샷 이미지 사용
 
 interface VideoPageProps {
   signals: Signals;
   now: number;
+  /** 목 모드면 실시간 영상 대신 정지 이미지 카드를 쓴다 */
+  isMockMode: boolean;
 }
 
 // null 가능 필드를 화면에 표시할 때 쓰는 헬퍼
@@ -23,7 +20,7 @@ const nullableText = (
   unknownLabel = '모름',
 ): string => (value === null ? unknownLabel : format(value as NonNullable<typeof value>));
 
-export const VideoPage: React.FC<VideoPageProps> = ({ signals, now }) => {
+export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }) => {
   const connected = signals.connected;
   const shocks = recentShocks(signals, now);
 
@@ -105,7 +102,8 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now }) => {
 
   return (
     <>
-      <AiDetectionCard signals={signals} />
+      {/* 실시간 영상·박스는 이 탭에서만 연다. 탭을 벗어나면 언마운트되며 끊긴다 */}
+      {isMockMode ? <AiDetectionCard signals={signals} /> : <LiveVideoCard />}
 
       <section className="section-container">
         <h3 className="section-title">판단에 쓰이는 신호</h3>
@@ -127,9 +125,6 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now }) => {
           상태 판정은 서버가 수행합니다. 이 화면은 현재 신호 값만 표시합니다.
         </p>
       </section>
-
-      {/* bbox 오버레이 좌표 자리 — 나중에 /api/devices/{id}/detections/bboxes 연결 시 여기에 추가 */}
-      {/* TODO: bbox REST API 경로 확정 후 AiDetectionCard에 좌표 prop 전달 */}
     </>
   );
 };

@@ -9,6 +9,9 @@
  * - close code 1008: 인증 실패 → 재연결하지 않고 에러 콜백 호출.
  * - close code 1013: 연결 수 상한 → 잠시 후 재시도.
  * - 실서버 모드에서만 사용한다. 목 모드에서는 이 훅을 쓰지 않는다.
+ *
+ * /ws/web/video (인식 박스, 계약서 8-2) 도 같은 hello 인증이라 이 훅을 쓴다.
+ * path / messageTimeoutMs / enabled 로 구분한다. enabled 가 false 가 되면 즉시 끊는다.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -28,17 +31,28 @@ export type WsStatus =
   | 'auth_failed'   // 1008: 토큰 만료/무효
   | 'capacity';     // 1013: 연결 수 상한
 
-interface UseWebSocketOptions {
+interface UseWebSocketOptions<T> {
+  /** 접속 경로 (기본 /ws/web) */
+  path?: string;
+  /** 이 시간 넘게 메시지가 없으면 끊긴 것으로 본다 (기본 3000ms) */
+  messageTimeoutMs?: number;
+  /** false 면 연결하지 않고, 연결돼 있으면 끊는다 (기본 true) */
+  enabled?: boolean;
   /** 새 페이로드가 도착했을 때 */
-  onMessage: (payload: ServerPayload) => void;
+  onMessage: (payload: T) => void;
   /** 연결 상태가 바뀔 때 */
   onStatusChange: (status: WsStatus) => void;
   /** 3초 타임아웃으로 연결이 끊겼을 때 */
   onTimeout: () => void;
 }
 
-export function useWebSocket(options: UseWebSocketOptions): void {
-  const { onMessage, onStatusChange, onTimeout } = options;
+export function useWebSocket<T = ServerPayload>(options: UseWebSocketOptions<T>): void {
+  const {
+    path = '/ws/web',
+    messageTimeoutMs = MESSAGE_TIMEOUT_MS,
+    enabled = true,
+    onMessage, onStatusChange, onTimeout,
+  } = options;
 
   // ref로 관리해서 stale closure 문제를 피한다
   const wsRef = useRef<WebSocket | null>(null);
@@ -51,6 +65,10 @@ export function useWebSocket(options: UseWebSocketOptions): void {
   const onMessageRef = useRef(onMessage);
   const onStatusChangeRef = useRef(onStatusChange);
   const onTimeoutRef = useRef(onTimeout);
+  const pathRef = useRef(path);
+  const messageTimeoutMsRef = useRef(messageTimeoutMs);
+  pathRef.current = path;
+  messageTimeoutMsRef.current = messageTimeoutMs;
 
   useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
   useEffect(() => { onStatusChangeRef.current = onStatusChange; }, [onStatusChange]);
@@ -66,14 +84,14 @@ export function useWebSocket(options: UseWebSocketOptions): void {
   const resetMessageTimeout = useCallback(() => {
     clearMessageTimeout();
     messageTimeoutRef.current = setTimeout(() => {
-      // 3초 동안 메시지가 없음 → 끊긴 것으로 간주
+      // 제한 시간 동안 메시지가 없음 → 끊긴 것으로 간주
       onTimeoutRef.current();
       onStatusChangeRef.current('disconnected');
       // 소켓을 강제로 닫아서 재연결을 트리거한다
       if (wsRef.current) {
         wsRef.current.close();
       }
-    }, MESSAGE_TIMEOUT_MS);
+    }, messageTimeoutMsRef.current);
   }, [clearMessageTimeout]);
 
   const clearReconnectTimer = useCallback(() => {
@@ -97,7 +115,7 @@ export function useWebSocket(options: UseWebSocketOptions): void {
 
     // ws:// vs wss:// — location.protocol에 맞춘다
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${location.host}/ws/web`;
+    const wsUrl = `${wsProtocol}//${location.host}${pathRef.current}`;
 
     let ws: WebSocket;
     try {
@@ -131,9 +149,9 @@ export function useWebSocket(options: UseWebSocketOptions): void {
       onStatusChangeRef.current('connected');
       backoffRef.current = BACKOFF_INITIAL_MS; // 백오프 리셋
 
-      let payload: ServerPayload;
+      let payload: T;
       try {
-        payload = JSON.parse(event.data) as ServerPayload;
+        payload = JSON.parse(event.data) as T;
       } catch {
         // JSON 파싱 실패는 무시 (서버 버그)
         return;
@@ -143,6 +161,8 @@ export function useWebSocket(options: UseWebSocketOptions): void {
     };
 
     ws.onclose = (event) => {
+      // 이미 다른 소켓으로 교체됐으면 (enabled 토글 등) 무시한다
+      if (wsRef.current !== ws) return;
       clearMessageTimeout();
       wsRef.current = null;
 
@@ -184,7 +204,9 @@ export function useWebSocket(options: UseWebSocketOptions): void {
   }, [clearReconnectTimer, connect]);
 
   useEffect(() => {
+    if (!enabled) return;
     unmountedRef.current = false;
+    backoffRef.current = BACKOFF_INITIAL_MS;
     connect();
 
     return () => {
@@ -192,13 +214,14 @@ export function useWebSocket(options: UseWebSocketOptions): void {
       clearReconnectTimer();
       clearMessageTimeout();
       if (wsRef.current) {
-        wsRef.current.close();
+        const ws = wsRef.current;
         wsRef.current = null;
+        ws.close();
       }
     };
-    // connect는 useCallback으로 안정적이지만, 최초 마운트에만 실행한다
+    // connect는 useCallback으로 안정적이다. enabled/path 가 바뀔 때만 다시 연결한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled, path]);
 }
 
 // HELLO_TIMEOUT_S를 외부에서 참조할 필요가 있을 경우를 위해 export
