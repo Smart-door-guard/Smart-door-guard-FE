@@ -1,13 +1,15 @@
 ﻿import React, { useState } from 'react';
 import { Shield, PhoneCall, Sliders, Moon, Info, Cpu, XCircle } from 'lucide-react';
+import { ServerSettings } from './ServerSettings';
 import { DeviceSettings } from '../types';
 
 interface SettingsPageProps {
+  isMockMode?: boolean;
   settings: DeviceSettings;
   onSaveSettings: (newSettings: DeviceSettings) => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSettings }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSettings, isMockMode = false }) => {
   const [smsNumbers, setSmsNumbers] = useState<string[]>(settings.smsNumbers);
   const [sensitivity, setSensitivity] = useState<number>(settings.sensitivity);
   const [nightMode, setNightMode] = useState<boolean>(settings.nightMode);
@@ -86,7 +88,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
         </div>
       </div>
 
+      {!isMockMode && <ServerSettings />}
       {/* Section 2: Sensitivity & Night Mode */}
+      {isMockMode && <>
       <div className="galaxy-setting-group">
         <div className="galaxy-setting-header">경계 및 보안 옵션</div>
         <div className="galaxy-setting-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
@@ -134,6 +138,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
         </div>
       </div>
 
+      </>}
       {/* Section 3: Device Info */}
       <div className="galaxy-setting-group">
         <div className="galaxy-setting-header">장치 시스템 정보</div>
@@ -142,7 +147,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             <div className="galaxy-item-icon"><Info size={18} /></div>
             <div>
               <div className="galaxy-item-title">소프트웨어 버전</div>
-              <div className="galaxy-item-sub">SafeGuard App v1.0.4 (Latest)</div>
+              <div className="galaxy-item-sub">SafeGuard 웹 클라이언트</div>
             </div>
           </div>
         </div>
@@ -151,7 +156,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             <div className="galaxy-item-icon"><Cpu size={18} /></div>
             <div>
               <div className="galaxy-item-title">디바이스 펌웨어</div>
-              <div className="galaxy-item-sub">ESP32 Firmware v2.1.0-release</div>
+              <div className="galaxy-item-sub">연결된 장치 상태는 서버에서 확인</div>
             </div>
           </div>
         </div>

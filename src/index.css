@@ -1131,3 +1131,13 @@ body {
   border-radius: 2px;
 }
 .legend-swatch.dashed { border-style: dashed; }
+
+.server-tuning { padding: 20px; }
+.server-tuning h3 { margin: 0 0 12px; }
+.server-tuning p { font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.server-tuning fieldset { border: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+.server-tuning fieldset br { display: none; }
+.server-tuning label { display: grid; gap: 6px; font-size: 14px; }
+.server-tuning input, .server-tuning select { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #dce3e7; border-radius: 10px; font: inherit; background: white; }
+.server-tuning button { border: 0; border-radius: 10px; padding: 10px 14px; margin: 4px 6px 4px 0; background: #277d64; color: white; font: inherit; cursor: pointer; }
+.server-tuning button:disabled { opacity: .5; cursor: wait; }

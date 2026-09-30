@@ -14,6 +14,7 @@ import { Header } from './components/Header';
 import { StatusCard } from './components/StatusCard';
 import { QuickControls, LOCK_PULSE_MS, BUZZER_MS } from './components/QuickControls';
 import { VideoPage } from './components/VideoPage';
+import { ServerHistory } from './components/ServerHistory';
 import { HistoryPage } from './components/HistoryPage';
 import { SettingsPage } from './components/SettingsPage';
 import { SimulatorPanel } from './components/SimulatorPanel';
@@ -310,7 +311,7 @@ export const App: React.FC = () => {
           '⚠ 경고 단계',
           `[${formatTime(new Date()).slice(0, 5)}] 현관 이상 징후${
             reasonText(payload.signals)
-          }. 서버가 경고 조치를 실행 중입니다.`,
+          }. 실제 출력 여부는 제어 상태에서 확인하세요.`,
           'warning',
         );
       } else if (newState === 'UNKNOWN' && prevState !== 'UNKNOWN') {
@@ -475,7 +476,8 @@ export const App: React.FC = () => {
             </>
           )}
 
-          {activeTab === 'history' && (
+          {activeTab === 'history' && !isMockMode && <ServerHistory />}
+          {activeTab === 'history' && isMockMode && (
             <HistoryPage
               isMockMode={isMockMode}
               events={events}
@@ -487,6 +489,7 @@ export const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <SettingsPage
+              isMockMode={isMockMode}
               settings={settings}
               onSaveSettings={(newSet) => {
                 setSettings(newSet);
