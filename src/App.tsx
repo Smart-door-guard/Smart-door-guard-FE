@@ -303,7 +303,7 @@ export const App: React.FC = () => {
           '🚨 침입 감지',
           `[${formatTime(new Date()).slice(0, 5)}] 현관에서 침입이 감지되었습니다${
             reasonText(payload.signals)
-          }. 운영자가 확인(ack)해야 해제됩니다.`,
+          }. 침입 조건이 해소되면 상태가 자동으로 복귀합니다.`,
           'intrusion',
         );
       } else if (newState === 'WARNING') {

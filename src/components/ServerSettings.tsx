@@ -1,16 +1,13 @@
+import { SensorDiagnostics } from "./SensorDiagnostics";
 import React, { useEffect, useState } from "react";
 import {
   fetchSession,
   fetchTuning,
   saveTuning,
-  fetchInspection,
-  setArmed,
-  acknowledge,
   type TuningView,
 } from "../api/client";
 export function ServerSettings() {
   const [value, setValue] = useState<TuningView["current"] | null>(null);
-  const [armed, updateArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("서버 설정 조회 중…");
   useEffect(() => {
@@ -20,16 +17,12 @@ export function ServerSettings() {
         const session = await fetchSession();
         if (session.role !== "operator") {
           if (alive)
-            setMessage("설정 변경과 경계 제어는 운영자 QR로 접속해야 합니다.");
+            setMessage("설정 변경은 운영자 QR로 접속해야 합니다.");
           return;
         }
-        const [settings, inspection] = await Promise.all([
-          fetchTuning(),
-          fetchInspection(),
-        ]);
+        const settings = await fetchTuning();
         if (alive) {
           setValue(settings.current);
-          updateArmed(inspection.armed);
           setMessage("");
         }
       } catch (e) {
@@ -54,13 +47,14 @@ export function ServerSettings() {
   }
   return (
     <section className="galaxy-setting-group server-tuning">
-      <h3>서버 감지·경계 설정</h3>
+      <SensorDiagnostics />
+      <h3>센서 감지 설정</h3>
       <p role="status">{message}</p>
       {value && (
         <>
           <p>
             감지 설정은 서버에 저장됩니다. ESP32 로컬 충격 임계값은 펌웨어에서
-            별도로 설정합니다.
+            별도로 설정합니다. 새 펌웨어는 가속도와 거리 변화가 동시에 충족된 충격만 전송합니다. 서버 임계값을 보드보다 낮춰도 감도가 더 높아지지는 않습니다.
           </p>
           <form
             onSubmit={(e) => {
@@ -68,6 +62,7 @@ export function ServerSettings() {
               void run(async () => {
                 const saved = await saveTuning({
                   shockThresholdMps2: value.shockThresholdMps2,
+                  shockDistanceDeltaMm: value.shockDistanceDeltaMm,
                   shockCount: value.shockCount,
                   shockWindowMs: value.shockWindowMs,
                   autoAction: value.autoAction,
@@ -79,6 +74,8 @@ export function ServerSettings() {
             }}
           >
             <fieldset disabled={busy}>
+              <label>거리 변화 임계값 (mm) <input type="number" min="0.1" max="8190" step="0.1" required value={value.shockDistanceDeltaMm} onChange={e => setValue({...value, shockDistanceDeltaMm: Number(e.target.value)})} /></label>
+              <br />
               <label>
                 충격 임계값 (m/s²){" "}
                 <input
@@ -164,33 +161,6 @@ export function ServerSettings() {
               <button type="submit">서버에 저장</button>
             </fieldset>
           </form>
-          <p>
-            서버 경계: {armed ? "켜짐" : "꺼짐"} · 서버 재시작 시 꺼집니다.
-            ESP32 로컬 제어에는 적용되지 않습니다.
-          </p>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const s = await setArmed(!armed);
-                updateArmed(s.armed);
-                setMessage("경계 상태 적용 완료");
-              })
-            }
-          >
-            {armed ? "서버 경계 해제" : "서버 경계 시작"}
-          </button>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                await acknowledge();
-                setMessage("침입 확인 요청 처리 완료");
-              })
-            }
-          >
-            침입 상태 확인(ACK)
-          </button>
         </>
       )}
     </section>

@@ -37,6 +37,7 @@ export function OutputStatus() {
           : state.local_automation_enabled
             ? "활성"
             : "비활성"}{" "}
+        · 로컬 충격 대응 {state.local_actuations ?? "—"}회 · 로컬 부저 {state.local_buzzer_enabled ? "활성" : "비활성/미확인"}
         · 솔레노이드 작동 {state.solenoid.activation_count ?? "—"}회 (현재 부팅)
       </p>
     </div>

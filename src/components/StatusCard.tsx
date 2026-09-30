@@ -103,7 +103,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
           pillText: '잠금핀 구동',
           pillClass: 'state-intrusion',
           gaugeText: '침입',
-          subText: '운영자 확인(ack) 전까지 유지',
+          subText: '침입 조건이 해소되면 자동 복귀',
           bg: 'linear-gradient(145deg, #FFFFFF 0%, #FFF1F2 100%)',
           iconBg: '#FFE4E6',
           iconColor: '#E11D48',
