@@ -8,7 +8,12 @@
  * - 에러 코드·reason을 ControlError 형태로 정규화해서 던진다.
  */
 
-import type { ControlAction, ControlError, ControlResponse, SessionInfo } from '../types';
+import type {
+  ControlAction,
+  ControlError,
+  ControlResponse,
+  SessionInfo,
+} from "../types";
 
 // ── 토큰 저장소 (모듈 레벨 변수 — 메모리에만) ─────────────────────────
 let _token: string | null = null;
@@ -33,10 +38,10 @@ export function hasToken(): boolean {
 
 function authHeaders(): HeadersInit {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   };
   if (_token) {
-    headers['Authorization'] = `Bearer ${_token}`;
+    headers["Authorization"] = `Bearer ${_token}`;
   }
   return headers;
 }
@@ -63,8 +68,8 @@ async function apiFetch<T>(
     // 네트워크 자체가 끊긴 경우
     throw {
       status: 0,
-      code: 'network_error',
-      reason: '네트워크에 연결할 수 없습니다.',
+      code: "network_error",
+      reason: "네트워크에 연결할 수 없습니다.",
     } satisfies ControlError;
   }
 
@@ -85,7 +90,7 @@ async function apiFetch<T>(
   // 429: Retry-After 헤더 읽기
   let retryAfterMs: number | undefined;
   if (response.status === 429) {
-    const retryAfter = response.headers.get('Retry-After');
+    const retryAfter = response.headers.get("Retry-After");
     if (retryAfter) {
       retryAfterMs = parseFloat(retryAfter) * 1000;
     } else if (body.cooldownRemainingMs) {
@@ -95,17 +100,19 @@ async function apiFetch<T>(
 
   // 401: 계약서 1절 — detail 필드에 한국어 문구
   if (response.status === 401) {
-    const detail = (body as Record<string, unknown>)?.detail as string | undefined;
+    const detail = (body as Record<string, unknown>)?.detail as
+      | string
+      | undefined;
     throw {
       status: 401,
-      code: 'unauthorized',
-      reason: detail ?? '토큰이 유효하지 않거나 만료되었습니다.',
+      code: "unauthorized",
+      reason: detail ?? "토큰이 유효하지 않거나 만료되었습니다.",
     } satisfies ControlError;
   }
 
   throw {
     status: response.status,
-    code: body.code ?? 'error',
+    code: body.code ?? "error",
     reason: body.reason ?? `오류가 발생했습니다. (HTTP ${response.status})`,
     ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
   } satisfies ControlError;
@@ -118,7 +125,7 @@ async function apiFetch<T>(
  * 토큰이 유효한지, 역할이 무엇인지 확인한다.
  */
 export async function fetchSession(): Promise<SessionInfo> {
-  return apiFetch<SessionInfo>('/api/web/session');
+  return apiFetch<SessionInfo>("/api/web/session");
 }
 
 /**
@@ -131,8 +138,93 @@ export async function postControl(
   action: ControlAction,
   durationMs: number = 200,
 ): Promise<ControlResponse> {
-  return apiFetch<ControlResponse>('/api/web/control', {
-    method: 'POST',
+  return apiFetch<ControlResponse>("/api/web/control", {
+    method: "POST",
     body: JSON.stringify({ action, durationMs }),
   });
 }
+
+export interface CommandState {
+  commandId: string;
+  action: ControlAction;
+  status:
+    | "pending"
+    | "executed"
+    | "completed"
+    | "rejected"
+    | "timeout"
+    | "unknown";
+  reason: string;
+  outputActive: boolean | null;
+  outputValid: boolean;
+}
+export async function waitForCommand(
+  id: string,
+  progress: (state: CommandState) => void,
+): Promise<void> {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const state = await apiFetch<CommandState>(
+      `/api/web/commands/${encodeURIComponent(id)}`,
+    );
+    progress(state);
+    if (state.status === "completed") return;
+    if (["rejected", "timeout", "unknown"].includes(state.status)) {
+      throw {
+        reason:
+          state.status === "rejected"
+            ? `장치 거절: ${state.reason}`
+            : "실행 또는 종료 확인 불가. 실제 출력 상태를 확인하세요.",
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw {
+    reason:
+      "출력 종료 확인 시간이 지났습니다. 실행되지 않았다는 뜻은 아닙니다.",
+  };
+}
+export interface ServerEvent {
+  id: number;
+  at: string;
+  kind: string;
+  type: "normal" | "watch" | "warning" | "intrusion" | "unknown";
+  title: string;
+}
+export function fetchEvents(before?: number) {
+  return apiFetch<{ items: ServerEvent[]; nextCursor: number | null }>(
+    `/api/web/events?limit=100${before ? `&before=${before}` : ""}`,
+  );
+}
+export interface TuningView {
+  current: {
+    shockThresholdMps2: number;
+    shockCount: number;
+    shockWindowMs: number;
+    autoAction: ControlAction;
+    autoDurationMs: number;
+  };
+  defaults: Record<string, unknown>;
+  changed: string[];
+}
+export const fetchTuning = () => apiFetch<TuningView>("/api/web/settings");
+export const saveTuning = (current: TuningView["current"]) =>
+  apiFetch<TuningView>("/api/web/settings", {
+    method: "PATCH",
+    body: JSON.stringify(current),
+  });
+export const fetchInspection = () =>
+  apiFetch<{ armed: boolean }>("/api/web/inspect");
+export const setArmed = (armed: boolean) =>
+  apiFetch<{ armed: boolean }>("/api/web/arm", {
+    method: "POST",
+    body: JSON.stringify({ armed }),
+  });
+export const acknowledge = () => apiFetch("/api/web/ack", { method: "POST" });
+export interface OutputStatus {
+  valid: boolean;
+  local_automation_enabled: boolean | null;
+  solenoid: { active: boolean | null; activation_count: number | null };
+  buzzer: { active: boolean | null; activation_count: number | null };
+}
+export const fetchOutputs = () => apiFetch<OutputStatus>("/api/web/actuators");

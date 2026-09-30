@@ -14,6 +14,7 @@ import { Header } from './components/Header';
 import { StatusCard } from './components/StatusCard';
 import { QuickControls, LOCK_PULSE_MS, BUZZER_MS } from './components/QuickControls';
 import { VideoPage } from './components/VideoPage';
+import { ServerHistory } from './components/ServerHistory';
 import { HistoryPage } from './components/HistoryPage';
 import { SettingsPage } from './components/SettingsPage';
 import { SimulatorPanel } from './components/SimulatorPanel';
@@ -270,7 +271,7 @@ export const App: React.FC = () => {
       if (newState === 'INTRUSION') {
         triggerPush('🚨 침입 감지', '운영자가 확인(ack)해야 해제됩니다.');
       } else if (newState === 'WARNING') {
-        triggerPush('⚠ 경고 단계', '서버가 경고 조치를 실행 중입니다.');
+        triggerPush('⚠ 경고 단계', '경고 상태입니다. 실제 출력 여부는 제어 상태에서 확인하세요.');
       } else if (newState === 'UNKNOWN' && prevState !== 'UNKNOWN') {
         triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
       }
@@ -433,7 +434,8 @@ export const App: React.FC = () => {
             </>
           )}
 
-          {activeTab === 'history' && (
+          {activeTab === 'history' && !isMockMode && <ServerHistory />}
+          {activeTab === 'history' && isMockMode && (
             <HistoryPage
               isMockMode={isMockMode}
               events={events}
@@ -445,6 +447,7 @@ export const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <SettingsPage
+              isMockMode={isMockMode}
               settings={settings}
               onSaveSettings={(newSet) => {
                 setSettings(newSet);
