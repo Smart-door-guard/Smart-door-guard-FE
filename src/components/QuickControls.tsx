@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, Bell, Check } from 'lucide-react';
-import { postControl } from '../api/client';
+import { OutputStatus } from './OutputStatus';
+import { postControl, waitForCommand } from '../api/client';
 import type { ControlError, ControlsInfo } from '../types';
 
 export const LOCK_PULSE_MS = 300;
@@ -53,6 +54,7 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
 }) => {
   const [solenoidState, setSolenoidState] = useState<ActionState>(defaultActionState());
   const [buzzerState, setBuzzerState] = useState<ActionState>(defaultActionState());
+  const [feedback, setFeedback] = useState('');
   const [lastSolenoidAt, setLastSolenoidAt] = useState<number | null>(null);
 
   // 쿨다운 카운트다운 타이머
@@ -118,10 +120,14 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
     if (isMockMode) { onFireLock(); return; }
     setSolenoidState({ loading: true, error: null, countdown: null });
     try {
-      await postControl('solenoid', LOCK_PULSE_MS);
+      const result = await postControl('solenoid', LOCK_PULSE_MS);
+      if (!result.commandId) throw {reason: '명령 ID가 없습니다.'};
+      setFeedback('솔레노이드 명령 접수 · 장치 응답 대기');
+      await waitForCommand(result.commandId, (s) => setFeedback(s.status === 'executed' ? '솔레노이드 출력 시작 확인 · 종료 대기' : s.status === 'completed' ? '솔레노이드 출력 종료 확인 (기계적 잠금 여부는 확인 불가)' : '솔레노이드 장치 응답 대기'));
       setLastSolenoidAt(Date.now());
       setSolenoidState({ loading: false, error: null, countdown: null });
     } catch (err) {
+      setFeedback('');
       handleError(err, setSolenoidState);
     }
   };
@@ -130,9 +136,13 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
     if (isMockMode) { onRingBuzzer(); return; }
     setBuzzerState({ loading: true, error: null, countdown: null });
     try {
-      await postControl('buzzer', BUZZER_MS);
+      const result = await postControl('buzzer', BUZZER_MS);
+      if (!result.commandId) throw {reason: '명령 ID가 없습니다.'};
+      setFeedback('부저 명령 접수 · 장치 응답 대기');
+      await waitForCommand(result.commandId, (s) => setFeedback(s.status === 'executed' ? '부저 출력 시작 확인 · 종료 대기' : s.status === 'completed' ? '부저 출력 종료 확인' : '부저 장치 응답 대기'));
       setBuzzerState({ loading: false, error: null, countdown: null });
     } catch (err) {
+      setFeedback('');
       handleError(err, setBuzzerState);
     }
   };
@@ -145,6 +155,8 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
   return (
     <section className="section-container">
       <h3 className="section-title">빠른 제어</h3>
+      <p role="status" aria-live="polite">{feedback}</p>
+      {!isMockMode && <OutputStatus />}
 
       {/* controls.reason 표시 (실서버 모드에서 버튼이 막힌 이유) */}
       {!isMockMode && !controlsAvailable && controlsReason && (

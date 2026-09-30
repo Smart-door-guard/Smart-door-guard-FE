@@ -88,3 +88,19 @@ smart-door-guard-fe/
 npm install
 npm run dev
 ```
+
+## FastAPI end-to-end integration
+
+Live mode now uses persistent `/api/web/events` history and operator `/api/web/settings` tuning.
+Command buttons follow the returned ID through execution ACK and fresh output-OFF confirmation;
+HTTP 202 alone is never presented as completed actuation. Output state and local automation
+are read from `/api/web/actuators`. Server tuning persists across restart; server arming does not.
+
+The live settings page exposes actual server shock thresholds and arm/ack controls.
+The old unimplemented night schedule stays in mock mode only. SMS ownership is unchanged.
+ESP32 local shock control is independent of server arming, and cannot be disabled from this page.
+
+Requires the matching SafeGuard backend update providing `/api/web/events`,
+`/api/web/commands/{id}`, `/api/web/actuators` and persisted tuning.
+Validated with a simulated sensor and camera over real HTTP/WebSocket plus browser interaction.
+Physical hardware and real AI inference must still be verified on the deployment machine.
