@@ -105,46 +105,53 @@ body {
   align-items: center;
 }
 
-/* Push Banner */
+/* Push Banner — 문자 수신 알림 모양 */
 .push-notification {
   position: absolute;
-  top: -100px;
-  left: 16px;
-  right: 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border-radius: 20px;
-  padding: 14px 18px;
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  box-shadow: 0 12px 30px rgba(225, 29, 72, 0.2);
-  border: 1px solid rgba(225, 29, 72, 0.3);
+  top: -220px;
+  left: 12px;
+  right: 12px;
+  background: rgba(245, 245, 247, 0.96);
+  backdrop-filter: blur(16px);
+  border-radius: 18px;
+  padding: 10px 14px 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  border-left: 4px solid var(--text-muted);
   z-index: 100;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.push-notification.active {
-  top: 54px;
+.push-notification.active { top: 54px; }
+.push-notification.push-intrusion { border-left-color: var(--state-intrusion); }
+.push-notification.push-intrusion.active { animation: push-shake 0.5s ease 0.4s 2; }
+.push-notification.push-warning { border-left-color: var(--state-warning, #f59e0b); }
+
+@keyframes push-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
 }
 
-.push-icon-box {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: var(--state-intrusion-bg);
-  color: var(--state-intrusion);
+.push-app-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.push-app-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #34c759;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
-
-.push-content { flex: 1; }
-.push-header { display: flex; justify-content: space-between; margin-bottom: 2px; }
-.push-title { font-weight: 700; font-size: 14px; color: var(--state-intrusion); }
-.push-time { font-size: 11px; color: var(--text-muted); }
-.push-body { font-size: 12px; color: var(--text-main); line-height: 1.35; }
+.push-app-name { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em; }
+.push-time { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.push-sender { font-size: 14px; font-weight: 700; color: var(--text-main); }
+.push-title { font-size: 13px; font-weight: 700; color: var(--text-main); margin-top: 1px; }
+.push-intrusion .push-title { color: var(--state-intrusion); }
+.push-body { font-size: 12px; color: var(--text-main); line-height: 1.4; margin-top: 2px; }
+.push-recipients { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.push-hint { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 6px; }
 
 /* Header */
 .app-header {

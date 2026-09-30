@@ -71,6 +71,16 @@ const mockInitialSignals: Signals = {
 const formatTime = (date: Date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
 
+// 알림 본문에 붙일 감지 근거 (" (문 열림 · 충격 3회)" 형태, 없으면 빈 문자열)
+const reasonText = (s: Signals) => {
+  const parts = [
+    s.doorOpen ? '문 열림' : null,
+    s.shockTimes.length > 0 ? `충격 ${s.shockTimes.length}회` : null,
+    s.personCount ? `사람 ${s.personCount}명` : null,
+  ].filter(Boolean);
+  return parts.length ? ` (${parts.join(' · ')})` : '';
+};
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'history' | 'video' | 'settings'>('home');
 
@@ -146,10 +156,30 @@ export const App: React.FC = () => {
     setLogs((prev) => [...prev.slice(-99), `[${formatTime(new Date())}] ${msg}`]);
   }, []);
 
-  const triggerPush = useCallback((title: string, body: string) => {
-    setNotification({ title, body });
-    setTimeout(() => setNotification(null), 4500);
+  // 최신 설정을 콜백 재생성 없이 읽기 위한 ref (문자 수신자 표시용)
+  const smsNumbersRef = useRef<string[]>([]);
+  smsNumbersRef.current = settings.smsNumbers;
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissPush = useCallback(() => {
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = null;
+    setNotification(null);
   }, []);
+
+  const triggerPush = useCallback(
+    (title: string, body: string, level: PushNotificationData['level'] = 'info') => {
+      const sticky = level === 'intrusion';
+      const recipients = level === 'info' ? [] : smsNumbersRef.current;
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = sticky ? null : setTimeout(() => setNotification(null), 4500);
+      setNotification({ title, body, level, sticky, recipients });
+      // 진동은 안드로이드 크롬 등에서만 동작한다 (iOS Safari는 미지원이라 무시됨)
+      if (level === 'intrusion') navigator.vibrate?.([300, 150, 300, 150, 600]);
+      else if (level === 'warning') navigator.vibrate?.(200);
+    },
+    [],
+  );
 
   const addEventLog = useCallback((type: EventLog['type'], title: string) => {
     setEvents((prev) => [
@@ -212,7 +242,7 @@ export const App: React.FC = () => {
         if (escalated) {
           // 목 모드에서만 자동 부저 — 실서버 모드에서는 서버가 한다
           ringBuzzer('auto');
-          triggerPush('경고 단계, 부저 작동', `${reasons} 신호가 함께 감지되었습니다.`);
+          triggerPush('경고 단계, 부저 작동', `${reasons} 신호가 함께 감지되었습니다.`, 'warning');
         }
         break;
       case 'INTRUSION':
@@ -220,7 +250,7 @@ export const App: React.FC = () => {
         // 목 모드에서만 자동 구동 — 실서버 모드에서는 서버가 한다
         ringBuzzer('auto');
         fireLock('auto');
-        triggerPush('🚨 침입 판단, 잠금핀 구동', `${reasons} 신호가 모두 감지되어 잠금핀을 구동했습니다.`);
+        triggerPush('🚨 침입 판단, 잠금핀 구동', `${reasons} 신호가 모두 감지되어 잠금핀을 구동했습니다.`, 'intrusion');
         break;
     }
   }, [signals, now, isMockMode, addLog, addEventLog, triggerPush, ringBuzzer, fireLock]);
@@ -269,9 +299,21 @@ export const App: React.FC = () => {
 
       // 침입 상태 알림
       if (newState === 'INTRUSION') {
-        triggerPush('🚨 침입 감지', '운영자가 확인(ack)해야 해제됩니다.');
+        triggerPush(
+          '🚨 침입 감지',
+          `[${formatTime(new Date()).slice(0, 5)}] 현관에서 침입이 감지되었습니다${
+            reasonText(payload.signals)
+          }. 운영자가 확인(ack)해야 해제됩니다.`,
+          'intrusion',
+        );
       } else if (newState === 'WARNING') {
-        triggerPush('⚠ 경고 단계', '경고 상태입니다. 실제 출력 여부는 제어 상태에서 확인하세요.');
+        triggerPush(
+          '⚠ 경고 단계',
+          `[${formatTime(new Date()).slice(0, 5)}] 현관 이상 징후${
+            reasonText(payload.signals)
+          }. 실제 출력 여부는 제어 상태에서 확인하세요.`,
+          'warning',
+        );
       } else if (newState === 'UNKNOWN' && prevState !== 'UNKNOWN') {
         triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
       }
@@ -398,7 +440,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Push Notification */}
-        <PushNotification notification={notification} />
+        <PushNotification notification={notification} onDismiss={dismissPush} />
 
         {/* Header */}
         <Header

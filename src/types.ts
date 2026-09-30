@@ -104,4 +104,9 @@ export interface DeviceSettings {
 export interface PushNotificationData {
   title: string;
   body: string;
+  level?: 'intrusion' | 'warning' | 'info';
+  // true면 자동으로 사라지지 않고 탭해야 닫힌다 (침입)
+  sticky?: boolean;
+  // 문자 알림 수신자 표시용 (설정의 smsNumbers)
+  recipients?: string[];
 }
