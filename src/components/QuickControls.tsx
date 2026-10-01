@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, Bell, Check } from 'lucide-react';
-import { postControl, waitForCommand } from '../api/client';
+import { Lock, LockOpen, Bell, Check } from 'lucide-react';
+import { fetchOutputs, postControl, waitForCommand } from '../api/client';
 import type { ControlError, ControlsInfo } from '../types';
 
 export const LOCK_PULSE_MS = 300;
@@ -55,6 +55,34 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
   const [buzzerState, setBuzzerState] = useState<ActionState>(defaultActionState());
   const [feedback, setFeedback] = useState('');
   const [lastSolenoidAt, setLastSolenoidAt] = useState<number | null>(null);
+  // Latched lock reported by the firmware (null: older firmware without lock mode).
+  const [lockEngaged, setLockEngaged] = useState<boolean | null>(null);
+  const [lockReason, setLockReason] = useState<'impact' | 'remote' | null>(null);
+
+  useEffect(() => {
+    if (isMockMode) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const o = await fetchOutputs();
+        if (!stopped) {
+          setLockEngaged(o.valid ? o.lock_engaged ?? null : null);
+          setLockReason(o.lock_reason ?? null);
+        }
+      } catch {
+        /* keep the last known state */
+      } finally {
+        if (!stopped) timer = setTimeout(poll, 1000);
+      }
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [isMockMode]);
+  const lockMode = !isMockMode && lockEngaged !== null;
 
   // 쿨다운 카운트다운 타이머
   useEffect(() => {
@@ -118,6 +146,24 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
   const handleSolenoid = async () => {
     if (isMockMode) { onFireLock(); return; }
     setSolenoidState({ loading: true, error: null, countdown: null });
+    if (lockMode) {
+      const action = lockEngaged ? 'unlock' : 'lock';
+      try {
+        const result = await postControl(action);
+        if (!result.commandId) throw { reason: '명령 ID가 없습니다.' };
+        setFeedback(action === 'lock' ? '잠그는 중…' : '해제하는 중…');
+        await waitForCommand(result.commandId, () => undefined);
+        setLockEngaged(action === 'lock');
+        setLockReason('remote');
+        setFeedback(action === 'lock' ? '잠금 완료' : '해제 완료');
+        setLastSolenoidAt(Date.now());
+        setSolenoidState({ loading: false, error: null, countdown: null });
+      } catch (err) {
+        setFeedback('');
+        handleError(err, setSolenoidState);
+      }
+      return;
+    }
     try {
       const result = await postControl('solenoid', LOCK_PULSE_MS);
       if (!result.commandId) throw {reason: '명령 ID가 없습니다.'};
@@ -165,22 +211,32 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
         {/* 솔레노이드 */}
         <div className="quick-card control-card">
           <div className="control-row">
-            <div className={`quick-icon-wrapper ${solenoidFiring ? 'active' : ''}`}>
-              <Lock size={20} />
+            <div className={`quick-icon-wrapper ${solenoidFiring || (lockMode && lockEngaged) ? 'active' : ''}`}>
+              {lockMode && !lockEngaged ? <LockOpen size={20} /> : <Lock size={20} />}
             </div>
             <div className="quick-info">
-              <span className="quick-title">결박 구동</span>
-              <span className="quick-status">눌러서 1회 구동 · {LOCK_PULSE_MS}ms</span>
+              <span className="quick-title">{lockMode ? '도어 잠금' : '결박 구동'}</span>
+              <span className="quick-status">
+                {lockMode
+                  ? lockEngaged
+                    ? lockReason === 'impact' ? '잠김 · 충격 감지' : '잠김'
+                    : '해제됨'
+                  : `눌러서 1회 구동 · ${LOCK_PULSE_MS}ms`}
+              </span>
             </div>
             <button
-              className="action-btn primary"
+              className={`action-btn ${lockMode && lockEngaged ? 'secondary' : 'primary'}`}
               disabled={!canFireSolenoid || solenoidFiring}
               onClick={handleSolenoid}
             >
-              {solenoidState.loading ? '전송 중' : solenoidFiring ? '구동 중' : '구동'}
+              {solenoidState.loading
+                ? '전송 중'
+                : lockMode
+                  ? lockEngaged ? '해제' : '잠금'
+                  : solenoidFiring ? '구동 중' : '구동'}
             </button>
           </div>
-          <div className="control-footer">
+          {!lockMode && <div className="control-footer">
             <span className="control-footer-left">
               {displayLastLockAt === null ? (
                 '구동 기록 없음'
@@ -190,8 +246,7 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
                 </>
               )}
             </span>
-            <span className="control-footer-right">잠금 상태 확인 불가</span>
-          </div>
+          </div>}
           {/* 에러 또는 쿨다운 표시 */}
           {solenoidState.error && (
             <div className={`action-error ${solenoidState.countdown !== null ? 'cooldown' : ''}`}>

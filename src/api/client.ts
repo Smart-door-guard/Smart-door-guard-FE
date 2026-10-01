@@ -221,6 +221,8 @@ export interface OutputStatus {
   local_buzzer_enabled?: boolean | null;
   solenoid: { active: boolean | null; activation_count: number | null };
   buzzer: { active: boolean | null; activation_count: number | null };
+  lock_engaged?: boolean | null;
+  lock_reason?: 'impact' | 'remote' | null;
 }
 export const fetchOutputs = () => apiFetch<OutputStatus>("/api/web/actuators");
 
