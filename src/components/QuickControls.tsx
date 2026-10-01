@@ -57,7 +57,7 @@ export const QuickControls: React.FC<QuickControlsProps> = ({
   const [lastSolenoidAt, setLastSolenoidAt] = useState<number | null>(null);
   // Latched lock reported by the firmware (null: older firmware without lock mode).
   const [lockEngaged, setLockEngaged] = useState<boolean | null>(null);
-  const [lockReason, setLockReason] = useState<'impact' | 'remote' | null>(null);
+  const [lockReason, setLockReason] = useState<'impact' | 'remote' | 'boot' | null>(null);
 
   useEffect(() => {
     if (isMockMode) return;

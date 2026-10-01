@@ -9,8 +9,8 @@ import {
   type DoorStatus,
 } from '../api/client';
 
-const MIN = 1;
-const MAX = 40;
+const MIN = 5;
+const MAX = 150;
 
 /** Detection settings: impact-lock threshold and magnetic door sensor calibration. */
 export const DetectionSettings: React.FC = () => {
@@ -129,8 +129,8 @@ export const DetectionSettings: React.FC = () => {
           type="range"
           min={MIN}
           max={MAX}
-          step={0.5}
-          value={threshold ?? 12}
+          step={1}
+          value={threshold ?? 100}
           className="form-range"
           onChange={(e) => setThreshold(Number(e.target.value))}
         />
