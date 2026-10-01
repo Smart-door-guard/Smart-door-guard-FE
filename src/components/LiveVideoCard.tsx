@@ -33,7 +33,7 @@ const ERROR_INFO: Record<StreamErrorCode, { title: string; retryMs: number | nul
   ended:          { title: '영상이 끊겼습니다', retryMs: 3_000 },
   network:        { title: '네트워크 오류로 영상을 받지 못했습니다', retryMs: 5_000 },
   error:          { title: '영상을 불러오지 못했습니다', retryMs: 5_000 },
-  unauthorized:   { title: '인증이 만료되었습니다 · QR 코드를 다시 스캔하십시오', retryMs: null },
+  unauthorized:   { title: 'QR을 다시 스캔하세요', retryMs: null },
 };
 
 const ANALYSIS_STATUS_TEXT: Record<string, string> = {
@@ -245,9 +245,7 @@ export const LiveVideoCard: React.FC = () => {
               <strong>{ERROR_INFO[phase.code].title}</strong>
               {phase.detail && <span>{phase.detail}</span>}
               <span className="live-video-retry">
-                {phase.retryMs !== null
-                  ? `${Math.round(phase.retryMs / 1000)}초 뒤 다시 시도합니다 · 정지 이미지 표시 중`
-                  : '정지 이미지 표시 중'}
+                {phase.retryMs !== null ? '다시 연결하는 중…' : ''}
               </span>
             </div>
           )}

@@ -1,6 +1,5 @@
 ﻿import React, { useState } from 'react';
 import { Shield, PhoneCall, Sliders, Moon, Info, Cpu, XCircle } from 'lucide-react';
-import { ServerSettings } from './ServerSettings';
 import { DeviceSettings } from '../types';
 
 interface SettingsPageProps {
@@ -64,7 +63,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             </div>
             <div>
               <div className="galaxy-item-title">비상 SMS 수신 번호</div>
-              <div className="galaxy-item-sub">침입 발생 시 즉시 문자를 전송합니다</div>
+              <div className="galaxy-item-sub">침입 시 문자 알림</div>
             </div>
           </div>
           <div className="input-with-btn" style={{ marginTop: 4 }}>
@@ -88,7 +87,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
         </div>
       </div>
 
-      {!isMockMode && <ServerSettings />}
       {/* Section 2: Sensitivity & Night Mode */}
       {isMockMode && <>
       <div className="galaxy-setting-group">
@@ -147,7 +145,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             <div className="galaxy-item-icon"><Info size={18} /></div>
             <div>
               <div className="galaxy-item-title">소프트웨어 버전</div>
-              <div className="galaxy-item-sub">SafeGuard 웹 클라이언트</div>
+              <div className="galaxy-item-sub">v1.0</div>
             </div>
           </div>
         </div>
@@ -156,7 +154,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
             <div className="galaxy-item-icon"><Cpu size={18} /></div>
             <div>
               <div className="galaxy-item-title">디바이스 펌웨어</div>
-              <div className="galaxy-item-sub">연결된 장치 상태는 서버에서 확인</div>
+              <div className="galaxy-item-sub">ESP32 · ESP32-CAM</div>
             </div>
           </div>
         </div>

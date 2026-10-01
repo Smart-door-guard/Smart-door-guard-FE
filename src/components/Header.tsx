@@ -5,7 +5,6 @@ import type { WsStatus } from '../api/wsClient';
 interface HeaderProps {
   title: string;
   connected: boolean;
-  degraded?: boolean;
   wsStatus?: WsStatus;
   isMockMode?: boolean;
 }
@@ -13,7 +12,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   title,
   connected,
-  degraded = false,
   wsStatus,
   isMockMode = false,
 }) => {
@@ -51,10 +49,6 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
       <div className="header-right">
-        {/* degraded 배지 — 신호 일부가 누락된 상태에서 판정 중 */}
-        {degraded && !isMockMode && (
-          <span className="degraded-badge">⚠ 기능 저하</span>
-        )}
         <div className={`connection-badge ${badge.cls}`}>
           <span className="pulse-dot"></span>
           <span>{badge.label}</span>

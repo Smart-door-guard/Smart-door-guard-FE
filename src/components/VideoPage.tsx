@@ -13,11 +13,10 @@ interface VideoPageProps {
 }
 
 // null 가능 필드를 화면에 표시할 때 쓰는 헬퍼
-// null = "모름", false나 0으로 대체하지 않는다
 const nullableText = (
   value: string | number | boolean | null,
   format: (v: NonNullable<typeof value>) => string,
-  unknownLabel = '모름',
+  unknownLabel = '—',
 ): string => (value === null ? unknownLabel : format(value as NonNullable<typeof value>));
 
 export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }) => {
@@ -36,26 +35,17 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
   const doorText = nullableText(
     signals.doorOpen,
     (v) => (v ? '열림' : '닫힘'),
-    '모름',
+    '—',
   );
 
   // 문틈 거리 표시
-  const gapText = nullableText(signals.gapMm, (v) => `${v}mm`, '모름');
+  const gapText = nullableText(signals.gapMm, (v) => `${v}mm`, '—');
 
-  // 사람 수 표시 — null은 "모름"
   const personText = !connected
     ? '—'
-    : signals.personCount === null
-      ? '모름'
-      : signals.personCount === 0
-        ? '없음'
-        : `${signals.personCount}명 · ${
-            signals.personRegistered === null
-              ? '식별 불가'
-              : signals.personRegistered
-                ? '등록'
-                : '미등록'
-          }`;
+    : !signals.personCount
+      ? '없음'
+      : `${signals.personCount}명${signals.personRegistered === true ? ' · 등록' : signals.personRegistered === false ? ' · 미등록' : ''}`;
 
   // 문 열림 여부가 null이면 active 판정 불가 → 표시 안 함
   const doorActive = signals.doorOpen === true;
@@ -95,7 +85,7 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
   // 이상 신호 요약 (서버 상태를 쓰는 실서버 모드에서는 표시만 담당)
   const anomalyCount = rows.filter((r) => r.active).length;
   const summaryText = !connected
-    ? '신호가 들어오지 않아 판정할 수 없습니다'
+    ? '연결 중'
     : anomalyCount === 0
       ? '이상 신호 없음'
       : `이상 신호 ${anomalyCount}건`;
@@ -106,7 +96,7 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
       {isMockMode ? <AiDetectionCard signals={signals} /> : <LiveVideoCard />}
 
       <section className="section-container">
-        <h3 className="section-title">판단에 쓰이는 신호</h3>
+        <h3 className="section-title">센서</h3>
         <div className="card signal-card">
           {rows.map(({ Icon, label, value, active }) => (
             <div key={label} className="signal-row">
@@ -121,9 +111,6 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
           ))}
           <div className="signal-summary">{summaryText}</div>
         </div>
-        <p className="signal-note">
-          상태 판정은 서버가 수행합니다. 이 화면은 현재 신호 값만 표시합니다.
-        </p>
       </section>
     </>
   );
