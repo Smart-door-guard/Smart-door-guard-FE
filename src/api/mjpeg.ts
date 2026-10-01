@@ -80,7 +80,9 @@ export function startMjpeg(img: HTMLImageElement, handlers: MjpegHandlers): () =
         fail('카메라 연결을 기다리는 중', 'camera_offline');
         return;
       }
-      await new Promise((r) => setTimeout(r, Math.max(0, 400 - (Date.now() - started))));
+      // The server long-polls (answers when a new frame lands), so loop right away;
+      // only back off after an error.
+      await new Promise((r) => setTimeout(r, failingSince !== null ? 1000 : Math.max(0, 100 - (Date.now() - started))));
     }
   })();
 

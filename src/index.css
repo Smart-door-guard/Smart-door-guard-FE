@@ -1141,3 +1141,10 @@ body {
 .server-tuning input, .server-tuning select { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #dce3e7; border-radius: 10px; font: inherit; background: white; }
 .server-tuning button { border: 0; border-radius: 10px; padding: 10px 14px; margin: 4px 6px 4px 0; background: #277d64; color: white; font: inherit; cursor: pointer; }
 .server-tuning button:disabled { opacity: .5; cursor: wait; }
+
+/* impact meter (settings) */
+.impact-meter { display: flex; flex-direction: column; gap: 6px; }
+.impact-meter-bar { position: relative; height: 12px; border-radius: 6px; background: #E2E8F0; overflow: hidden; }
+.impact-meter-fill { height: 100%; background: #10B981; transition: width 120ms linear; }
+.impact-meter-fill.over { background: #E11D48; }
+.impact-meter-line { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #0F172A; }

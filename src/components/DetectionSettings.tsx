@@ -3,12 +3,13 @@ import { Activity, DoorOpen } from 'lucide-react';
 import {
   calibrateDoor,
   fetchDoor,
+  fetchSensors,
   fetchTuning,
   saveImpactThreshold,
   type DoorStatus,
 } from '../api/client';
 
-const MIN = 5;
+const MIN = 1;
 const MAX = 40;
 
 /** Detection settings: impact-lock threshold and magnetic door sensor calibration. */
@@ -18,6 +19,36 @@ export const DetectionSettings: React.FC = () => {
   const [door, setDoor] = useState<DoorStatus | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState<number | null>(null);
+  const [recentMax, setRecentMax] = useState<number>(0);
+  const peaks = React.useRef<{ at: number; v: number }[]>([]);
+
+  // Live impact strength: the meter the threshold is set against.
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const sensors = await fetchSensors();
+        const v = sensors.mpu6050.shock_peak_mps2;
+        if (!alive) return;
+        setLive(v);
+        const now = Date.now();
+        if (v !== null) peaks.current.push({ at: now, v });
+        peaks.current = peaks.current.filter((p) => now - p.at < 3000);
+        setRecentMax(peaks.current.reduce((m, p) => Math.max(m, p.v), 0));
+      } catch {
+        /* keep last */
+      } finally {
+        if (alive) timer = setTimeout(poll, 250);
+      }
+    };
+    void poll();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -79,11 +110,26 @@ export const DetectionSettings: React.FC = () => {
             </div>
           </div>
         </div>
+        <div className="impact-meter" aria-label="실시간 충격 세기">
+          <div className="impact-meter-bar">
+            <div
+              className={`impact-meter-fill ${threshold !== null && recentMax >= threshold ? 'over' : ''}`}
+              style={{ width: `${Math.min(100, (recentMax / MAX) * 100)}%` }}
+            />
+            {threshold !== null && (
+              <div className="impact-meter-line" style={{ left: `${(threshold / MAX) * 100}%` }} />
+            )}
+          </div>
+          <div className="range-labels">
+            <span>지금 {live === null ? '—' : live.toFixed(1)}</span>
+            <span>최근 3초 최대 {recentMax.toFixed(1)} m/s²</span>
+          </div>
+        </div>
         <input
           type="range"
           min={MIN}
           max={MAX}
-          step={1}
+          step={0.5}
           value={threshold ?? 12}
           className="form-range"
           onChange={(e) => setThreshold(Number(e.target.value))}
