@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, DoorOpen, Ruler, User } from 'lucide-react';
+import { Activity, DoorOpen, User } from 'lucide-react';
 import { Signals } from '../types';
 import { AiDetectionCard } from './AiDetectionCard';
 import { LiveVideoCard } from './LiveVideoCard';
@@ -39,7 +39,6 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
   );
 
   // 문틈 거리 표시
-  const gapText = nullableText(signals.gapMm, (v) => `${v}mm`, '—');
 
   const personText = !connected
     ? '—'
@@ -49,7 +48,6 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
 
   // 문 열림 여부가 null이면 active 판정 불가 → 표시 안 함
   const doorActive = signals.doorOpen === true;
-  const gapActive = signals.doorOpen === true;
 
   const rows = [
     {
@@ -60,15 +58,9 @@ export const VideoPage: React.FC<VideoPageProps> = ({ signals, now, isMockMode }
     },
     {
       Icon: DoorOpen,
-      label: '문 상태 센서',
+      label: '문 (자석 센서)',
       value: connected ? doorText : '—',
       active: connected && doorActive,
-    },
-    {
-      Icon: Ruler,
-      label: '문틈 거리 (VL53L0X)',
-      value: connected ? gapText : '—',
-      active: connected && gapActive,
     },
     {
       Icon: Activity,

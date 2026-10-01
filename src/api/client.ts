@@ -204,11 +204,17 @@ export interface TuningView {
     shockWindowMs: number;
     autoAction: ControlAction;
     autoDurationMs: number;
+    impactThresholdMps2: number;
   };
   defaults: Record<string, unknown>;
   changed: string[];
 }
 export const fetchTuning = () => apiFetch<TuningView>("/api/web/settings");
+export const saveImpactThreshold = (value: number) =>
+  apiFetch<TuningView>("/api/web/settings", {
+    method: "PATCH",
+    body: JSON.stringify({ impactThresholdMps2: value, shockThresholdMps2: value }),
+  });
 export const saveTuning = (current: TuningView["current"]) =>
   apiFetch<TuningView>("/api/web/settings", {
     method: "PATCH",

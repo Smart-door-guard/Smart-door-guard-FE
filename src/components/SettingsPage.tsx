@@ -1,4 +1,5 @@
-﻿import React, { useState } from 'react';
+﻿import { DetectionSettings } from './DetectionSettings';
+import React, { useState } from 'react';
 import { Shield, PhoneCall, Sliders, Moon, Info, Cpu, XCircle } from 'lucide-react';
 import { DeviceSettings } from '../types';
 
@@ -87,6 +88,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ settings, onSaveSett
         </div>
       </div>
 
+      {!isMockMode && <DetectionSettings />}
       {/* Section 2: Sensitivity & Night Mode */}
       {isMockMode && <>
       <div className="galaxy-setting-group">

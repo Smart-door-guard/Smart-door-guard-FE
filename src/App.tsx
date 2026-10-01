@@ -131,7 +131,7 @@ export const App: React.FC = () => {
     isMockMode
       ? [
           '[System] SafeGuard 상태 판단 엔진 시작됨.',
-          '[ESP32] 센서 수집 시작 (MPU6050 · VL53L0X · 문 상태 센서)',
+          '[ESP32] 센서 수집 시작 (MPU6050 · 문 상태 센서)',
         ]
       : []
   );
