@@ -49,7 +49,7 @@ export interface ControlsInfo {
 // ============================================================
 // 조작 API 응답 — POST /api/web/control
 // ============================================================
-export type ControlAction = 'buzzer' | 'solenoid';
+export type ControlAction = 'buzzer' | 'solenoid' | 'lock' | 'unlock';
 
 export interface ControlResponse {
   accepted: boolean;

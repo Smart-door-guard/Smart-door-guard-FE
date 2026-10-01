@@ -199,32 +199,59 @@ export function fetchEvents(before?: number) {
 export interface TuningView {
   current: {
     shockThresholdMps2: number;
+    shockDistanceDeltaMm: number;
     shockCount: number;
     shockWindowMs: number;
     autoAction: ControlAction;
     autoDurationMs: number;
+    impactThresholdMps2: number;
   };
   defaults: Record<string, unknown>;
   changed: string[];
 }
 export const fetchTuning = () => apiFetch<TuningView>("/api/web/settings");
+export const saveImpactThreshold = (value: number) =>
+  apiFetch<TuningView>("/api/web/settings", {
+    method: "PATCH",
+    body: JSON.stringify({ impactThresholdMps2: value, shockThresholdMps2: value }),
+  });
 export const saveTuning = (current: TuningView["current"]) =>
   apiFetch<TuningView>("/api/web/settings", {
     method: "PATCH",
     body: JSON.stringify(current),
   });
-export const fetchInspection = () =>
-  apiFetch<{ armed: boolean }>("/api/web/inspect");
-export const setArmed = (armed: boolean) =>
-  apiFetch<{ armed: boolean }>("/api/web/arm", {
-    method: "POST",
-    body: JSON.stringify({ armed }),
-  });
-export const acknowledge = () => apiFetch("/api/web/ack", { method: "POST" });
 export interface OutputStatus {
   valid: boolean;
   local_automation_enabled: boolean | null;
+  local_actuations?: number | null;
+  local_buzzer_enabled?: boolean | null;
   solenoid: { active: boolean | null; activation_count: number | null };
   buzzer: { active: boolean | null; activation_count: number | null };
+  lock_engaged?: boolean | null;
+  lock_reason?: 'impact' | 'remote' | 'boot' | null;
 }
 export const fetchOutputs = () => apiFetch<OutputStatus>("/api/web/actuators");
+
+export interface DoorStatus {
+  raw: number | null;
+  door_open: boolean | null;
+  calibrated: boolean;
+  closed_level: number | null;
+  pending_observations: string[];
+}
+export interface SensorDiagnostics {
+  connected: boolean;
+  mpu6050: { shock_peak_mps2: number | null };
+  vl53l0x: { distance_mm: number | null };
+  errors: string[] | null;
+  shock_detection: {
+    valid: boolean; algorithm: string; event_count: number; distance_delta_mm: number;
+    accel_threshold_mps2: number; distance_threshold_mm: number; coincidence_ms: number;
+  } | null;
+}
+export const fetchSensors = () => apiFetch<SensorDiagnostics>('/api/web/sensors');
+export const fetchDoor = () => apiFetch<DoorStatus>('/api/web/door');
+export const calibrateDoor = (state: 'open' | 'closed') => apiFetch<DoorStatus>('/api/web/door/calibration', {
+  method: 'POST', body: JSON.stringify({observed_state: state}),
+});
+export const resetDoorCalibration = () => apiFetch<DoorStatus>('/api/web/door/calibration', {method: 'DELETE'});

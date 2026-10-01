@@ -34,11 +34,8 @@ export const AiDetectionCard: React.FC<AiDetectionCardProps> = ({ signals }) => 
       ? `PERSON (${confidence}%) · ${signals.personRegistered === null ? '식별 불가' : signals.personRegistered ? '등록' : '미등록'}`
       : `PERSON · ${signals.personRegistered === null ? '식별 불가' : signals.personRegistered ? '등록' : '미등록'}`;
 
-  // 사람 수 표시: null은 "모름"
   const personCountText =
-    signals.personCount === null
-      ? '모름'
-      : signals.personCount === 0
+    !signals.personCount
         ? '없음'
         : `사람 ${signals.personCount}명`;
 

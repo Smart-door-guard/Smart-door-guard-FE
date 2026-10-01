@@ -44,7 +44,7 @@ function initToken(): boolean {
 const tokenFound = initToken();
 
 // ── 초기값 ────────────────────────────────────────────────────────────────
-// 실서버 모드: 서버에서 값이 오기 전에는 전부 "모름"
+// 실서버 모드: 서버에서 값이 오기 전에는 전부 null
 const unknownSignals: Signals = {
   connected: false,
   personCount: null,
@@ -92,8 +92,6 @@ export const App: React.FC = () => {
 
   // 실서버 모드 전용 상태
   const [systemState, setSystemState] = useState<SystemState>('UNKNOWN');
-  const [degraded, setDegraded] = useState<boolean>(false);
-  const [missing, setMissing] = useState<MissingSignal[]>([]);
   const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
   const [serverControls, setServerControls] = useState<{ available: boolean; reason: string }>({
     available: false,
@@ -133,7 +131,7 @@ export const App: React.FC = () => {
     isMockMode
       ? [
           '[System] SafeGuard 상태 판단 엔진 시작됨.',
-          '[ESP32] 센서 수집 시작 (MPU6050 · VL53L0X · 문 상태 센서)',
+          '[ESP32] 센서 수집 시작 (MPU6050 · 문 상태 센서)',
         ]
       : []
   );
@@ -227,8 +225,8 @@ export const App: React.FC = () => {
 
     switch (current) {
       case 'UNKNOWN':
-        addEventLog('unknown', '판정 불가: 장치 신호 수신 없음');
-        triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
+        addEventLog('unknown', '장치 연결 끊김');
+        triggerPush('장치 연결 끊김', '장치 연결을 확인하세요.');
         break;
       case 'NORMAL':
         addEventLog('normal', prev === 'UNKNOWN' ? '신호 복구, 정상 단계' : '정상 단계 복귀');
@@ -258,11 +256,11 @@ export const App: React.FC = () => {
   // ── 실서버 모드: WebSocket 메시지 처리 ────────────────────────────────────
   const handleWsMessage = useCallback((payload: ServerPayload) => {
     const prevState = prevStateRef.current;
-    const newState = payload.systemState;
+    // While the device is connected, missing signals are not a user-facing state.
+    const newState: SystemState =
+      payload.systemState === 'UNKNOWN' && payload.signals.connected ? 'NORMAL' : payload.systemState;
 
     setSystemState(newState);
-    setDegraded(payload.degraded);
-    setMissing(payload.missing);
     setSignals(payload.signals);
     setServerControls(payload.controls);
     setLatencySec(0.2); // 200ms 주기 — 고정 표시
@@ -280,42 +278,24 @@ export const App: React.FC = () => {
       };
 
       const stateLabel: Record<SystemState, string> = {
-        UNKNOWN: '판정 불가',
+        UNKNOWN: '연결 중',
         NORMAL: '정상',
         WATCH: '감시',
         WARNING: '경고',
         INTRUSION: '침입',
       };
 
-      const missingLabel = payload.missing
-        .map((m) => ({ doorOpen: '문 모름', shock: '충격 모름', person: '사람 모름' }[m]))
-        .join(' · ');
-
-      const title = `${stateLabel[prevState]} → ${stateLabel[newState]}${
-        payload.degraded && missingLabel ? ` (${missingLabel})` : ''
-      }`;
+      const title = `${stateLabel[prevState]} → ${stateLabel[newState]}`;
 
       addEventLog(typeMap[newState], title);
 
       // 침입 상태 알림
       if (newState === 'INTRUSION') {
-        triggerPush(
-          '🚨 침입 감지',
-          `[${formatTime(new Date()).slice(0, 5)}] 현관에서 침입이 감지되었습니다${
-            reasonText(payload.signals)
-          }. 운영자가 확인(ack)해야 해제됩니다.`,
-          'intrusion',
-        );
+        triggerPush('🚨 침입 감지', `현관에서 침입이 감지되었습니다${reasonText(payload.signals)}`, 'intrusion');
       } else if (newState === 'WARNING') {
-        triggerPush(
-          '⚠ 경고 단계',
-          `[${formatTime(new Date()).slice(0, 5)}] 현관 이상 징후${
-            reasonText(payload.signals)
-          }. 실제 출력 여부는 제어 상태에서 확인하세요.`,
-          'warning',
-        );
+        triggerPush('⚠ 경고', `현관 이상 징후${reasonText(payload.signals)}`, 'warning');
       } else if (newState === 'UNKNOWN' && prevState !== 'UNKNOWN') {
-        triggerPush('장치 연결 끊김', '신호가 들어오지 않아 상태를 판정할 수 없습니다.');
+        triggerPush('장치 연결 끊김', '장치 연결을 확인하세요.');
       }
     }
   }, [addEventLog, triggerPush]);
@@ -326,8 +306,6 @@ export const App: React.FC = () => {
       // 연결이 끊기면 UNKNOWN으로. 목 기본값으로 폴백하지 않는다.
       setSystemState('UNKNOWN');
       setSignals(unknownSignals);
-      setDegraded(false);
-      setMissing([]);
       setLatencySec(null);
       setServerControls({ available: false, reason: '장치에 연결되어 있지 않습니다.' });
     }
@@ -337,8 +315,6 @@ export const App: React.FC = () => {
     // 3초 타임아웃 — UNKNOWN으로
     setSystemState('UNKNOWN');
     setSignals(unknownSignals);
-    setDegraded(false);
-    setMissing([]);
     setLatencySec(null);
     setServerControls({ available: false, reason: '서버 응답이 없습니다.' });
   }, []);
@@ -412,15 +388,7 @@ export const App: React.FC = () => {
         <div className="no-token-card">
           <div className="no-token-icon">📵</div>
           <h2 className="no-token-title">QR 코드를 다시 스캔하세요</h2>
-          <p className="no-token-body">
-            입장 토큰이 없습니다.<br />
-            운영자에게 받은 QR 코드를 스캔하면<br />
-            자동으로 연결됩니다.
-          </p>
-          <p className="no-token-hint">
-            URL을 직접 열거나 복사·붙여넣기 하면<br />
-            토큰이 빠져서 연결할 수 없습니다.
-          </p>
+          <p className="no-token-body">입장 QR을 스캔하면 바로 연결됩니다.</p>
         </div>
       </div>
     );
@@ -446,7 +414,6 @@ export const App: React.FC = () => {
         <Header
           title={getPageTitle()}
           connected={displayConnected}
-          degraded={degraded}
           wsStatus={wsStatus}
           isMockMode={isMockMode}
         />
@@ -459,8 +426,6 @@ export const App: React.FC = () => {
                 systemState={mockSystemState}
                 signals={signals}
                 latencySec={displayConnected ? latencySec : null}
-                degraded={degraded}
-                missing={missing}
               />
               <QuickControls
                 isMockMode={isMockMode}
