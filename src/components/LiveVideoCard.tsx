@@ -16,8 +16,8 @@ import {
 
 const FALLBACK_SRC = '/ai_snapshot.jpg';
 // 이 시간 넘게 새 프레임이 없으면 멈춘 것으로 보고 박스를 지우고 다시 연결한다
-const FRAME_STALE_MS = 3000;
-const FRAME_STALL_RESTART_MS = 8000;
+const FRAME_STALE_MS = 6000;
+const FRAME_STALL_RESTART_MS = 15000;
 const REDRAW_INTERVAL_MS = 200;
 
 type StreamPhase =

@@ -27,17 +27,18 @@ export interface MjpegHandlers {
   onError: (detail: string, code: StreamErrorCode) => void;
 }
 
-// 깨진 스트림 방어: FF D9 없이 이만큼 쌓이면 버린다
-const MAX_BUFFER_BYTES = 2_000_000;
-
 /**
  * img 에 MJPEG 을 그리기 시작한다. 반환된 stop() 을 반드시 호출해야 한다.
  * stop() 은 여러 번 불러도 안전하다.
  */
 export function startMjpeg(img: HTMLImageElement, handlers: MjpegHandlers): () => void {
+  // Polls the latest frame instead of holding one long streaming response: mobile Safari
+  // drops long streams through the tunnel, while short requests survive a weak network.
   const abort = new AbortController();
   let url: string | null = null;
   let stopped = false;
+  let lastId: string | null = null;
+  let failingSince: number | null = null;
 
   const fail = (detail: string, code: StreamErrorCode) => {
     if (!stopped) handlers.onError(detail, code);
@@ -46,61 +47,48 @@ export function startMjpeg(img: HTMLImageElement, handlers: MjpegHandlers): () =
   (async () => {
     const token = getToken();
     if (!token) { fail('토큰이 없습니다. QR 코드를 다시 스캔하십시오.', 'unauthorized'); return; }
-
-    const res = await fetch('/api/web/stream', {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: abort.signal,
-      cache: 'no-store',
-    });
-    if (!res.ok || !res.body) {
-      const body = await res.json().catch(() => ({})) as { detail?: string; code?: string };
-      const code: StreamErrorCode =
-        res.status === 401 ? 'unauthorized'
-        : body.code === 'camera_offline' || body.code === 'viewers_full' || body.code === 'upstream_error'
-          ? body.code
-          : 'error';
-      fail(body.detail ?? `HTTP ${res.status}`, code);
-      return;
-    }
-
-    const reader = res.body.getReader();
-    let buf = new Uint8Array(0);
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (stopped) return;
-      if (done) { fail('영상이 끊겼습니다.', 'ended'); return; }
-
-      const next = new Uint8Array(buf.length + value.length);
-      next.set(buf); next.set(value, buf.length); buf = next;
-
-      // JPEG 는 FF D8 로 시작해서 FF D9 로 끝난다. 완성된 프레임만 그린다.
-      for (;;) {
-        const s = indexOfPair(buf, 0xff, 0xd8, 0);
-        if (s < 0) { buf = buf.slice(-1); break; }
-        const e = indexOfPair(buf, 0xff, 0xd9, s + 2);
-        if (e < 0) { buf = buf.slice(s); break; }
-        const blob = new Blob([buf.slice(s, e + 2)], { type: 'image/jpeg' });
-        if (url) URL.revokeObjectURL(url);          // 메모리 누수 방지
-        url = URL.createObjectURL(blob);
-        img.src = url;
-        buf = buf.slice(e + 2);
-        handlers.onFrame?.();
+    while (!stopped) {
+      const started = Date.now();
+      try {
+        const res = await fetch(`/api/web/snapshot${lastId ? `?after=${lastId}` : ''}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: abort.signal,
+          cache: 'no-store',
+        });
+        if (stopped) return;
+        if (res.status === 401) { fail('QR을 다시 스캔하세요', 'unauthorized'); return; }
+        if (res.status === 200) {
+          lastId = res.headers.get('X-Frame-Id');
+          const blob = await res.blob();
+          if (stopped) return;
+          if (url) URL.revokeObjectURL(url);
+          url = URL.createObjectURL(blob);
+          img.src = url;
+          handlers.onFrame?.();
+          failingSince = null;
+        } else if (res.status === 304) {
+          failingSince = null;
+        } else {
+          failingSince ??= Date.now();
+        }
+      } catch (e) {
+        if ((e as { name?: string })?.name === 'AbortError') return;
+        failingSince ??= Date.now();
       }
-      if (buf.length > MAX_BUFFER_BYTES) buf = new Uint8Array(0);
+      // Only report after a sustained outage; single failed polls are just retried.
+      if (failingSince !== null && Date.now() - failingSince > 15_000) {
+        fail('카메라 연결을 기다리는 중', 'camera_offline');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, Math.max(0, 400 - (Date.now() - started))));
     }
-  })().catch((e: unknown) => {
-    if ((e as { name?: string })?.name !== 'AbortError') fail('영상 연결 오류가 발생했습니다.', 'network');
-  });
+  })();
 
   return function stop() {
     if (stopped) return;
     stopped = true;
-    abort.abort();          // 연결을 끊어야 서버가 시청 슬롯을 돌려준다
+    abort.abort();
     if (url) { URL.revokeObjectURL(url); url = null; }
   };
 }
 
-function indexOfPair(b: Uint8Array, x: number, y: number, from: number): number {
-  for (let i = from; i < b.length - 1; i++) if (b[i] === x && b[i + 1] === y) return i;
-  return -1;
-}

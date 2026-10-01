@@ -3,7 +3,6 @@ import { Activity, DoorOpen } from 'lucide-react';
 import {
   calibrateDoor,
   fetchDoor,
-  fetchSession,
   fetchTuning,
   saveImpactThreshold,
   type DoorStatus,
@@ -12,9 +11,8 @@ import {
 const MIN = 5;
 const MAX = 40;
 
-/** Owner-only detection settings. Renders nothing for audience (QR visitor) sessions. */
+/** Detection settings: impact-lock threshold and magnetic door sensor calibration. */
 export const DetectionSettings: React.FC = () => {
-  const [operator, setOperator] = useState(false);
   const [threshold, setThreshold] = useState<number | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
   const [door, setDoor] = useState<DoorStatus | null>(null);
@@ -26,15 +24,12 @@ export const DetectionSettings: React.FC = () => {
     let timer: ReturnType<typeof setTimeout>;
     (async () => {
       try {
-        const session = await fetchSession();
-        if (!alive || session.role !== 'operator') return;
-        setOperator(true);
         const tuning = await fetchTuning();
         if (!alive) return;
         setThreshold(tuning.current.impactThresholdMps2);
         setSaved(tuning.current.impactThresholdMps2);
       } catch {
-        /* audience or offline: stay hidden */
+        /* offline: keep defaults */
       }
     })();
     const pollDoor = async () => {
@@ -53,8 +48,6 @@ export const DetectionSettings: React.FC = () => {
       clearTimeout(timer);
     };
   }, []);
-
-  if (!operator) return null;
 
   const run = async (action: () => Promise<void>, done: string) => {
     setBusy(true);
